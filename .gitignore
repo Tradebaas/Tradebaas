@@ -1,0 +1,15 @@
+# Node / Next / logs
+node_modules/
+.next/
+npm-debug.log
+
+# Env files
+.env
+.env.*
+*.local
+
+# Docker
+*.tar
+
+# Misc
+.DS_Store
