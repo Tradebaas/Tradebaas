@@ -203,7 +203,7 @@ export const TradingCard: React.FC<TradingCardProps> = ({
           }}
         >
           {/* Content stack: header + pnl + core fields with gelijke gaps; laat dit geheel uitvullen */}
-          <div className="flex flex-col flex-1 text-stack" style={{ ['--text-gap' as any]: '0.75rem' }}>
+          <div className="flex flex-col flex-1 text-stack" style={{ ['--text-gap' as unknown as string]: '0.75rem' }}>
             {/* Header: title + status on left, gear + mode on right */}
             <div>
             <div className="flex items-center justify-between">
@@ -270,7 +270,7 @@ export const TradingCard: React.FC<TradingCardProps> = ({
             </div>
 
             {/* Kernvelden: gebruik dezelfde verticale ritmiek als overal via text-stack */}
-            <div className="text-stack" style={{ ['--text-gap' as any]: '0.75rem' }}>
+            <div className="text-stack" style={{ ['--text-gap' as unknown as string]: '0.75rem' }}>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-white/70">Entry</span>
                 <span className="text-base md:text-[15px] font-normal text-white/90 font-sans tabular-nums">{setup ? `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(setup.entry)}` : '—'}</span>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAccountSummary, getUserTradesByCurrency, getOpenPositions, getTicker, type UserTrade, type Position } from '@/lib/deribit';
+import { getAccountSummary, getUserTradesByCurrency, getOpenPositions, getTicker, type UserTrade, type Position, type Ticker } from '@/lib/deribit';
 
 function periodToWindow(period: string, now = Date.now()) {
   const p = (period || '1d').toLowerCase();
@@ -48,8 +48,8 @@ export async function GET(req: Request) {
       let unrealizedPnl = 0;
       const openPositions = await getOpenPositions(currency);
       for (const p of openPositions as Position[]) {
-        const ticker = await getTicker(p.instrument_name);
-        const mark = (ticker as any)?.mark_price ?? (ticker as any)?.index_price ?? (ticker as any)?.last_price ?? 0;
+        const ticker: Ticker = await getTicker(p.instrument_name);
+        const mark = ticker.mark_price ?? ticker.index_price ?? ticker.last_price ?? 0;
         const avg = p.average_price ?? 0;
         if (mark && avg && p.size) {
           unrealizedPnl += (mark - avg) * p.size;

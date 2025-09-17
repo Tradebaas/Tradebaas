@@ -71,6 +71,41 @@ type TokenInfo = {
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+async function sleep(ms: number) {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
+async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, maxRetries = 3): Promise<Response> {
+  let attempt = 0;
+  let delay = 250; // ms
+  while (true) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      const res = await fetch(input, { ...init, signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt < maxRetries) {
+          await sleep(delay);
+          attempt += 1;
+          delay = Math.min(delay * 2, 2000);
+          continue;
+        }
+      }
+      return res;
+    } catch (e) {
+      // Network error or timeout
+      if (attempt < maxRetries) {
+        await sleep(delay);
+        attempt += 1;
+        delay = Math.min(delay * 2, 2000);
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 async function jsonRpc<T = unknown>(method: string, params?: Record<string, unknown>, token?: string): Promise<T> {
   const req: JsonRpcRequest = {
     jsonrpc: '2.0',
@@ -84,13 +119,17 @@ async function jsonRpc<T = unknown>(method: string, params?: Record<string, unkn
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${getBaseUrl()}/api/v2/`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(req),
-    // Avoid Next.js fetch cache for private data
-    cache: 'no-store',
-  });
+  const res = await fetchWithRetry(
+    `${getBaseUrl()}/api/v2/`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(req),
+      // Avoid Next.js fetch cache for private data
+      cache: 'no-store',
+    },
+    3
+  );
 
   const data = (await res.json()) as JsonRpcResponse<T>;
   if (!res.ok || data.error) {
@@ -196,11 +235,10 @@ export async function getOpenPositions(currency: string): Promise<Position[]> {
   }
 }
 
-export async function getTicker(
-  instrumentName: string
-): Promise<{ mark_price?: number; last_price?: number; index_price?: number } | Record<string, unknown>> {
+export type Ticker = { mark_price?: number; last_price?: number; index_price?: number };
+export async function getTicker(instrumentName: string): Promise<Ticker> {
   const params: Record<string, unknown> = { instrument_name: instrumentName };
-  const result = await jsonRpc<Record<string, unknown>>('public/ticker', params);
+  const result = await jsonRpc<Ticker>('public/ticker', params);
   return result || {};
 }
 
@@ -266,16 +304,20 @@ export async function getUserTradesByCurrency(
   };
   try {
     const result = await jsonRpc<{ trades: UserTrade[] }>('private/get_user_trades_by_currency', params, token);
-    const trades = (result as unknown as any)?.trades || (result as unknown as UserTrade[]) || [];
-    return trades as UserTrade[];
+    type TradesResp = { trades?: unknown };
+    const maybe = result as unknown as TradesResp;
+    const trades = Array.isArray(maybe.trades) ? (maybe.trades as UserTrade[]) : [];
+    return trades;
   } catch (e) {
     const msg = String((e as { message?: string })?.message || '').toLowerCase();
     if (msg.includes('invalid_token') || msg.includes('invalid client') || msg.includes('invalid_client')) {
       cachedToken = null;
       token = await getToken();
       const result = await jsonRpc<{ trades: UserTrade[] }>('private/get_user_trades_by_currency', params, token);
-      const trades = (result as unknown as any)?.trades || (result as unknown as UserTrade[]) || [];
-      return trades as UserTrade[];
+      type TradesResp = { trades?: unknown };
+      const maybe = result as unknown as TradesResp;
+      const trades = Array.isArray(maybe.trades) ? (maybe.trades as UserTrade[]) : [];
+      return trades;
     }
     throw e;
   }

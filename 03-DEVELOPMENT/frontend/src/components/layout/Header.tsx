@@ -472,7 +472,8 @@ export default function Header({ className }: HeaderProps) {
         {(() => {
           const results = stopResult?.results || [];
           const total = Array.isArray(results) ? results.length : 0;
-          const okCount = Array.isArray(results) ? results.filter((r: any) => r.ok).length : 0;
+          type StopItem = { ok?: boolean } & Record<string, unknown>;
+          const okCount = Array.isArray(results) ? (results as StopItem[]).filter((r) => !!r.ok).length : 0;
           const failCount = total - okCount;
           return (
             <div className="space-y-4">
@@ -482,7 +483,7 @@ export default function Header({ className }: HeaderProps) {
                 <div className="text-sm text-red-400">Niet volledig gelukt: {okCount}/{total} posities gesloten.</div>
               )}
               {stopResult && 'cancelled' in stopResult ? (
-                <div className="text-xs text-white/70">Cancel summary: <span className="font-mono">{typeof (stopResult as any).cancelled === 'object' ? 'zie details' : String((stopResult as any).cancelled)}</span></div>
+                <div className="text-xs text-white/70">Cancel summary: <span className="font-mono">{typeof (stopResult as { cancelled?: unknown }).cancelled === 'object' ? 'zie details' : String((stopResult as { cancelled?: unknown }).cancelled)}</span></div>
               ) : null}
               {total > 0 ? (
                 <div>

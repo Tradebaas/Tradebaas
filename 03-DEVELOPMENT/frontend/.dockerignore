@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.husky
+npm-debug.log
+Dockerfile.dev
+Dockerfile.prod
+*.local
+.env*
+storybook-static

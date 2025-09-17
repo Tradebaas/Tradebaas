@@ -283,8 +283,9 @@ export default function DashboardPage() {
           const res = await fetch('/api/strategy/bots', { cache: 'no-store' });
           const data = await res.json().catch(() => ({}));
           if (res.ok && data && data.ok && Array.isArray(data.bots)) {
+            type ApiBot = { id?: string; instrumentName?: string };
             setTradingCards(prev => prev.map(card => {
-              const found = data.bots.find((b: any) => b.id === card.id);
+              const found = (data.bots as ApiBot[]).find((b) => b.id === card.id);
               return found && found.instrumentName
                 ? { ...card, instrumentName: String(found.instrumentName) }
                 : card;
