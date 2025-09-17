@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 13 21 38; /* brand-navy */
+    --foreground: 255 255 255;
+    --card: 26 49 64; /* brand-teal */
+    --card-foreground: 255 255 255;
+    --popover: 13 21 38;
+    --popover-foreground: 255 255 255;
+    --primary: 134 166 148; /* brand-seafoam */
+    --primary-foreground: 13 21 38;
+    --secondary: 46 81 89; /* brand-sage */
+    --secondary-foreground: 255 255 255;
+    --muted: 26 49 64;
+    --muted-foreground: 134 166 148;
+    --accent: 134 166 148; /* brand-seafoam */
+    --accent-foreground: 13 21 38;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+    --border: 255 255 255 / 0.1;
+    --input: 255 255 255 / 0.1;
+    --ring: 134 166 148;
+    --radius: 0.5rem;
+  }
+
+  /* Global typography is managed via RootLayout to avoid CSS @apply in globals. */
+}
+
+/* Base styles */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+body {
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Consistente verticale spacing tussen opeenvolgende tekstblokken (buiten Tailwind layers zodat het altijd verschijnt) */
+.text-stack > * + * {
+  margin-top: var(--text-gap, 0.5rem);
+}
