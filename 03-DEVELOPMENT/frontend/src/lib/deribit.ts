@@ -24,7 +24,7 @@ async function readFromFileAsync(path?: string): Promise<string | undefined> {
     if (!exists) return undefined;
     const content = await fs.promises.readFile(path, 'utf8');
     return content.trim();
-  } catch (_e) {
+  } catch {
     // ignore
   }
   return undefined;
@@ -269,6 +269,74 @@ export async function cancelAllByCurrency(currency: string): Promise<{ cancelled
       cachedToken = null;
       token = await getToken();
       return await jsonRpc('private/cancel_all_by_currency', params, token);
+    }
+    throw e;
+  }
+}
+
+export type PlaceOrderParams = {
+  instrumentName: string;
+  direction: 'buy' | 'sell';
+  amount: number;
+  type?: 'limit' | 'market';
+  price?: number;
+  timeInForce?: 'good_til_cancelled' | 'fill_or_kill' | 'immediate_or_cancel';
+  reduceOnly?: boolean;
+  label?: string;
+};
+
+export async function placeOrder(params: PlaceOrderParams): Promise<unknown> {
+  let token = await getToken();
+  const {
+    instrumentName,
+    direction,
+    amount,
+    type = 'limit',
+    price,
+    timeInForce,
+    reduceOnly,
+    label
+  } = params;
+
+  if (!instrumentName) {
+    throw new Error('instrumentName is required');
+  }
+  if (!amount || !Number.isFinite(amount) || amount <= 0) {
+    throw new Error('amount must be a positive number');
+  }
+
+  const payload: Record<string, unknown> = {
+    instrument_name: instrumentName,
+    amount,
+    type,
+  };
+
+  if (type !== 'market' && typeof price === 'number' && Number.isFinite(price) && price > 0) {
+    payload.price = price;
+  }
+
+  if (timeInForce) {
+    payload.time_in_force = timeInForce;
+  }
+
+  if (typeof reduceOnly === 'boolean') {
+    payload.reduce_only = reduceOnly;
+  }
+
+  if (label) {
+    payload.label = label;
+  }
+
+  const method = direction === 'sell' ? 'private/sell' : 'private/buy';
+
+  try {
+    return await jsonRpc(method, payload, token);
+  } catch (e) {
+    const msg = String((e as { message?: string })?.message || '').toLowerCase();
+    if (msg.includes('invalid_token') || msg.includes('invalid client') || msg.includes('invalid_client')) {
+      cachedToken = null;
+      token = await getToken();
+      return await jsonRpc(method, payload, token);
     }
     throw e;
   }

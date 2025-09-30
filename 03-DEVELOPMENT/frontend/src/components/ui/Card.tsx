@@ -5,7 +5,6 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg';
-  shadow?: 'none' | 'sm' | 'md' | 'lg';
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   onClick?: () => void;
   variant?: 'default' | 'glass' | 'ghost';
@@ -27,11 +26,10 @@ const cardRounded = {
   xl: 'rounded-xl'
 };
 
-export function Card({ 
-  children, 
+export function Card({
+  children,
   className,
   padding = 'md',
-  shadow = 'sm',
   rounded = 'lg',
   onClick,
   variant = 'default'
