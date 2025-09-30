@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Button, Modal, ConfirmModal, Skeleton } from '@/components';
+import { Button, Modal, ConfirmModal } from '@/components';
 import { useBots } from '@/context/BotsContext';
 
 // Trading modes
@@ -48,7 +48,7 @@ export interface TradingCardProps {
   onModeChange: (mode: TradingMode) => void;
   onStrategyChange: (strategy: Strategy) => void;
   onLinkStrategies: (strategies: Strategy[]) => void;
-  onPlaceTrade: (setup: TradingSetup) => void;
+  onPlaceTrade: (setup: TradingSetup) => Promise<void> | void;
   onSkipTrade: (setup: TradingSetup) => void;
   onStop: () => void;
   onStart: () => void;
@@ -85,26 +85,10 @@ export const TradingCard: React.FC<TradingCardProps> = ({
   const [showStrategySelectorModal, setShowStrategySelectorModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [localSelectedStrategyIds, setLocalSelectedStrategyIds] = useState<Set<string>>(new Set(linkedStrategies.map(s => s.id)));
+  const [isPlacingTrade, setIsPlacingTrade] = useState(false);
+  const [localErrorMessage, setLocalErrorMessage] = useState<string | null>(null);
 
   // No last update indicator in card per request
-
-  // Status styling
-  const getStatusColor = () => {
-    switch (status) {
-      case 'active':
-        return 'text-brand-mint/90 bg-brand-mint/15';
-      case 'setup':
-        return 'text-brand-sage/90 bg-brand-sage/15';
-      case 'analyzing':
-        return 'text-white/70 bg-white/10';
-      case 'error':
-        return 'text-red-400/90 bg-red-400/15';
-      case 'stopped':
-        return 'text-white/60 bg-white/10';
-      default:
-        return 'text-white/60 bg-white/10';
-    }
-  };
 
   const getStatusText = () => {
     switch (status) {
@@ -145,34 +129,48 @@ export const TradingCard: React.FC<TradingCardProps> = ({
   const handleStop = () => {
     setShowStopModal(false);
     stopBot(id);
+    setLocalErrorMessage(null);
     onStop();
   };
 
   const handleSkip = () => {
     if (setup) {
       setShowSkipModal(false);
+      setLocalErrorMessage(null);
       onSkipTrade(setup);
     }
   };
 
-  const handlePlaceTrade = () => {
-    if (setup) {
-      onPlaceTrade(setup);
+  const handlePlaceTrade = async () => {
+    if (!setup) return;
+    setLocalErrorMessage(null);
+    setIsPlacingTrade(true);
+    try {
+      await onPlaceTrade(setup);
+    } catch (err) {
+      const message = (err as { message?: string })?.message || 'Failed to place trade';
+      setLocalErrorMessage(message);
+      setShowErrorModal(true);
+      onErrorDetails(message);
+    } finally {
+      setIsPlacingTrade(false);
     }
   };
 
   // Strategy-info wordt via een centrale modal getoond
 
+  const errorMessage = localErrorMessage || error;
+
   const handleErrorClick = () => {
-    if (error) {
+    if (errorMessage) {
       setShowErrorModal(true);
-      onErrorDetails(error);
+      onErrorDetails(errorMessage);
     }
   };
 
   const copyError = () => {
-    if (error) {
-      navigator.clipboard.writeText(error);
+    if (errorMessage) {
+      navigator.clipboard.writeText(errorMessage);
     }
   };
 
@@ -181,6 +179,10 @@ export const TradingCard: React.FC<TradingCardProps> = ({
     const hasActiveTrade = status === 'active';
     const hasManualSignal = mode === 'manual' && !!setup && status === 'setup';
     if (hasActiveTrade || hasManualSignal) {
+      const infoStrategy = setup?.strategy || activeStrategy || linkedStrategies[0];
+      if (infoStrategy) {
+        onStrategyInfo(infoStrategy);
+      }
       setShowStrategyModal(true); // toon overzicht met highlight
     } else {
       setShowStrategySelectorModal(true); // geen trade/signaal => direct beheren/selecteren
@@ -301,6 +303,15 @@ export const TradingCard: React.FC<TradingCardProps> = ({
               {setup && mode === 'manual' && status === 'setup' && !setup.isRelevant && (
                 <span className="px-2.5 py-1 rounded-full text-xs border border-yellow-300/20 bg-yellow-300/10 text-yellow-300/90">Setup may no longer be relevant</span>
               )}
+              {errorMessage && (
+                <button
+                  type="button"
+                  onClick={handleErrorClick}
+                  className="px-2.5 py-1 rounded-full text-xs border border-red-400/40 bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-colors"
+                >
+                  View error
+                </button>
+              )}
             </div>
             {/* Extra vaste ruimte tussen kernvelden en actieknoppen */}
             <div className="h-8 md:h-10" aria-hidden="true" />
@@ -318,15 +329,17 @@ export const TradingCard: React.FC<TradingCardProps> = ({
                     variant="ghost"
                     size="sm"
                     className="w-full border border-white/15 bg-white/5 hover:bg-white/8 text-white/95 hover:text-white !font-normal"
-                    disabled={!setup.isRelevant}
+                    disabled={!setup.isRelevant || isPlacingTrade}
+                    aria-busy={isPlacingTrade}
                   >
-                    Place trade
+                    {isPlacingTrade ? 'Placing…' : 'Place trade'}
                   </Button>
                   <Button
                     onClick={() => setShowSkipModal(true)}
                     variant="ghost"
                     size="sm"
                     className="w-full border border-white/10 hover:border-white/15 text-white/85 hover:text-white !font-normal"
+                    disabled={isPlacingTrade}
                   >
                     Skip
                   </Button>
@@ -414,14 +427,29 @@ export const TradingCard: React.FC<TradingCardProps> = ({
                   {sorted.map((s) => {
                     const isActive = s.name === activeName;
                     return (
-                      <li key={s.id} className={`flex items-start justify-between gap-3 p-3 rounded-lg border ${isActive ? 'border-white/30 bg-white/10' : 'border-white/10 bg-white/5'}`}>
-                        <div className="text-stack">
-                          <div className="text-sm font-normal text-white/90 truncate max-w-[18rem]" title={s.name}>{s.name}</div>
-                          <div className="text-xs text-white/60 line-clamp-2">{s.description}</div>
+                      <li
+                        key={s.id}
+                        className={`p-3 rounded-lg border transition-colors ${isActive ? 'border-white/30 bg-white/10' : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'}`}
+                      >
+                        <div className="flex w-full items-start justify-between gap-3">
+                          <div className="text-stack">
+                            <div className="text-sm font-normal text-white/90 truncate max-w-[18rem]" title={s.name}>{s.name}</div>
+                            <div className="text-xs text-white/60 line-clamp-2">{s.description}</div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            {isActive ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] border border-brand-mint/30 text-brand-mint bg-brand-mint/10 !font-normal">Active</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onStrategyChange(s)}
+                                className="px-2 py-0.5 rounded-full text-[10px] border border-white/20 text-white/80 hover:border-white/40 hover:text-white"
+                              >
+                                Set active
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        {isActive && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] border border-brand-mint/30 text-brand-mint bg-brand-mint/10 !font-normal">Active</span>
-                        )}
                       </li>
                     );
                   })}
@@ -459,13 +487,14 @@ export const TradingCard: React.FC<TradingCardProps> = ({
       >
         <div className="text-stack">
           <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-            <pre className="text-sm font-normal text-red-400 whitespace-pre-wrap">{error}</pre>
+            <pre className="text-sm font-normal text-red-400 whitespace-pre-wrap">{errorMessage}</pre>
           </div>
           <Button
             onClick={copyError}
             variant="ghost"
             size="sm"
             className="w-full border border-white/10 hover:border-white/15 text-white/85 hover:text-white !font-normal"
+            disabled={!errorMessage}
           >
             Copy error
           </Button>

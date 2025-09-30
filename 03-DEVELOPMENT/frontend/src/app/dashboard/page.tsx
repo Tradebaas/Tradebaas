@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLastUpdated } from '@/context/LastUpdatedContext';
 import { useMode } from '@/context/ModeContext';
 import { useBots } from '@/context/BotsContext';
@@ -16,6 +16,7 @@ import {
   SectionSpacer
 } from '@/components';
 import type { TradingMode, TradingStatus, Strategy, TradingSetup } from '@/components';
+import { BASE_STRATEGIES, mergeStrategies } from '@/lib/strategies';
 
 // Period options for metrics
 const PERIOD_OPTIONS = [
@@ -24,25 +25,6 @@ const PERIOD_OPTIONS = [
   { name: '1 Month', value: '1m', label: '30D' },
   { name: '6 Months', value: '6m', label: '180D' },
   { name: '1 Year', value: '1y', label: '365D' }
-];
-
-// Available strategies
-const AVAILABLE_STRATEGIES: Strategy[] = [
-  {
-    id: 'scalping',
-    name: 'USDC Futures Scalping',
-    description: 'High-frequency BTC/ETH USDC perpetuals trading strategy focusing on small price movements with tight stop losses and quick profit taking.'
-  },
-  {
-    id: 'trend-following',
-    name: 'Futures Trend Following',
-    description: 'Multi-timeframe USDC futures strategy for BTC/ETH/SOL that identifies and follows strong market trends with dynamic position sizing.'
-  },
-  {
-    id: 'volatility-arbitrage',
-    name: 'Volatility Arbitrage',
-    description: 'Cross-contract USDC futures strategy that exploits volatility discrepancies between different cryptocurrency derivatives.'
-  }
 ];
 
 // Trading card interface
@@ -61,7 +43,7 @@ interface TradingCardData {
 
 export default function DashboardPage() {
   const { mode } = useMode();
-  const { globalStopped, stopAll, startAll, stopBot, startBot } = useBots();
+  const { stopBot, startBot } = useBots();
   // Live balance state
   const [balance, setBalance] = useState<number | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
@@ -69,7 +51,6 @@ export default function DashboardPage() {
   const [balanceRefreshing, setBalanceRefreshing] = useState<boolean>(false);
   // Live metrics today (PnL proxy and trades count)
   const [tradesToday, setTradesToday] = useState<number>(0);
-  const [pnlToday, setPnlToday] = useState<number | null>(null);
   const [pnlValue, setPnlValue] = useState<number | null>(null);
   const [winrateValue, setWinrateValue] = useState<number | null>(null);
   const [drawdownValue, setDrawdownValue] = useState<number | null>(null);
@@ -79,6 +60,56 @@ export default function DashboardPage() {
   const [winratePeriod, setWinratePeriod] = useState(PERIOD_OPTIONS[0]);
   const [drawdownPeriod, setDrawdownPeriod] = useState(PERIOD_OPTIONS[0]);
   const [winRatioPeriod, setWinRatioPeriod] = useState(PERIOD_OPTIONS[0]);
+  // Strategies (base + custom)
+  const [strategies, setStrategies] = useState<Strategy[]>(BASE_STRATEGIES);
+  const [customStrategies, setCustomStrategies] = useState<Strategy[]>([]);
+  const [strategiesLoading, setStrategiesLoading] = useState<boolean>(true);
+  const [strategiesError, setStrategiesError] = useState<string | null>(null);
+  const strategiesRef = useRef<Strategy[]>(strategies);
+
+  useEffect(() => {
+    let active = true;
+    const loadCustomStrategies = async () => {
+      try {
+        setStrategiesLoading(true);
+        setStrategiesError(null);
+        const res = await fetch('/api/strategy/custom', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok !== true || !Array.isArray(data.strategies)) {
+          throw new Error((data && data.error) || `HTTP ${res.status}`);
+        }
+
+        const sanitized = (data.strategies as Strategy[]).map((strategy) => ({
+          id: String(strategy.id),
+          name: String(strategy.name),
+          description: String(strategy.description ?? '').trim() || 'No description provided.'
+        }));
+
+        if (!active) return;
+        setCustomStrategies(sanitized);
+        setStrategies(mergeStrategies(BASE_STRATEGIES, sanitized));
+      } catch (error) {
+        if (!active) return;
+        const message = (error as { message?: string })?.message || 'Kon strategieën niet laden';
+        setStrategiesError(message);
+        setCustomStrategies([]);
+        setStrategies(BASE_STRATEGIES);
+      } finally {
+        if (active) {
+          setStrategiesLoading(false);
+        }
+      }
+    };
+
+    loadCustomStrategies();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    strategiesRef.current = strategies;
+  }, [strategies]);
 
   useEffect(() => {
     let active = true;
@@ -126,7 +157,6 @@ export default function DashboardPage() {
       setBalanceError(null);
       setBalanceLoading(false);
       setTradesToday(7);
-      setPnlToday(312);
       return () => { active = false; };
     }
   }, [mode]);
@@ -134,16 +164,14 @@ export default function DashboardPage() {
   // Fetch today metrics in live mode
   useEffect(() => {
     let active = true;
-    const firstLoadRef = { current: true } as { current: boolean };
     const fetchToday = async () => {
       try {
         const res = await fetch('/api/metrics/today?currency=USDC', { cache: 'no-store' });
         const data = await res.json();
         if (active && res.ok && data && data.ok) {
           setTradesToday(typeof data.tradesCount === 'number' ? data.tradesCount : 0);
-          setPnlToday(typeof data.pnlToday === 'number' ? data.pnlToday : null);
         }
-      } catch (_e) {
+      } catch {
         // Geen reset tijdens refresh; behoud vorige waarden om flicker te voorkomen
       }
     };
@@ -204,63 +232,76 @@ export default function DashboardPage() {
   const { touch: touchLastUpdated } = useLastUpdated();
 
   // Trading cards state
-  const demoCards: TradingCardData[] = useMemo(() => ([
-    {
-      id: 'card-1',
-      title: 'BOT 1',
-      status: 'active',
-      mode: 'auto',
-      instrumentName: 'BTC-PERPETUAL',
-      strategies: AVAILABLE_STRATEGIES,
-      linkedStrategies: [AVAILABLE_STRATEGIES[0]],
-      activeStrategy: AVAILABLE_STRATEGIES[0],
-      setup: {
-        entry: 65234,
-        stopLoss: 64500,
-        takeProfit: 66800,
-        leverage: 5,
-        riskAmount: 100,
-        riskPercentage: 1.5,
-        positionSize: 0.02,
-        unrealizedPnl: 42.5,
-        trailing: true,
-        strategy: AVAILABLE_STRATEGIES[0],
-        timestamp: new Date(),
-        isRelevant: true
+  const demoCards: TradingCardData[] = useMemo(() => {
+    const fallback = (index: number): Strategy | undefined => {
+      if (strategies[index]) return strategies[index];
+      if (BASE_STRATEGIES[index]) return BASE_STRATEGIES[index];
+      return strategies[0] || BASE_STRATEGIES[0];
+    };
+
+    const stratOne = fallback(0);
+    const stratTwo = fallback(1);
+    const stratThree = fallback(2);
+    const allStrategies = strategies.length > 0 ? strategies : BASE_STRATEGIES;
+
+    return [
+      {
+        id: 'card-1',
+        title: 'BOT 1',
+        status: 'active',
+        mode: 'auto',
+        instrumentName: 'BTC-PERPETUAL',
+        strategies: allStrategies,
+        linkedStrategies: stratOne ? [stratOne] : [],
+        activeStrategy: stratOne,
+        setup: {
+          entry: 65234,
+          stopLoss: 64500,
+          takeProfit: 66800,
+          leverage: 5,
+          riskAmount: 100,
+          riskPercentage: 1.5,
+          positionSize: 0.02,
+          unrealizedPnl: 42.5,
+          trailing: true,
+          strategy: stratOne ?? (allStrategies[0] || BASE_STRATEGIES[0]),
+          timestamp: new Date(),
+          isRelevant: true
+        }
+      },
+      {
+        id: 'card-2',
+        title: 'BOT 2',
+        status: 'setup',
+        mode: 'manual',
+        instrumentName: 'ETH-PERPETUAL',
+        strategies: allStrategies,
+        linkedStrategies: stratTwo ? [stratTwo] : [],
+        activeStrategy: stratTwo,
+        setup: {
+          entry: 2430,
+          stopLoss: 2390,
+          takeProfit: 2550,
+          leverage: 3,
+          riskAmount: 50,
+          riskPercentage: 1.0,
+          positionSize: 10,
+          strategy: stratTwo ?? stratOne ?? (allStrategies[0] || BASE_STRATEGIES[0]),
+          timestamp: new Date(),
+          isRelevant: true
+        }
+      },
+      {
+        id: 'card-3',
+        title: 'BOT 3',
+        status: 'analyzing',
+        mode: 'auto',
+        instrumentName: 'SOL-PERPETUAL',
+        strategies: allStrategies,
+        linkedStrategies: stratThree ? [stratThree] : []
       }
-    },
-    {
-      id: 'card-2',
-      title: 'BOT 2',
-      status: 'setup',
-      mode: 'manual',
-      instrumentName: 'ETH-PERPETUAL',
-      strategies: AVAILABLE_STRATEGIES,
-      linkedStrategies: [AVAILABLE_STRATEGIES[1]],
-      activeStrategy: AVAILABLE_STRATEGIES[1],
-      setup: {
-        entry: 2430,
-        stopLoss: 2390,
-        takeProfit: 2550,
-        leverage: 3,
-        riskAmount: 50,
-        riskPercentage: 1.0,
-        positionSize: 10,
-        strategy: AVAILABLE_STRATEGIES[1],
-        timestamp: new Date(),
-        isRelevant: true
-      }
-    },
-    {
-      id: 'card-3',
-      title: 'BOT 3',
-      status: 'analyzing',
-      mode: 'auto',
-      instrumentName: 'SOL-PERPETUAL',
-      strategies: AVAILABLE_STRATEGIES,
-      linkedStrategies: [AVAILABLE_STRATEGIES[2]]
-    }
-  ]), []);
+    ];
+  }, [strategies]);
 
   const [tradingCards, setTradingCards] = useState<TradingCardData[]>(demoCards);
 
@@ -268,36 +309,63 @@ export default function DashboardPage() {
   useEffect(() => {
     if (mode === 'demo') {
       setTradingCards(demoCards);
-    } else {
-      // Initialize with analyzing state and then enrich with backend-provided instrument mapping
-      const initial: TradingCardData[] = [
-        { id: 'card-1', title: 'BOT 1', status: 'analyzing', mode: 'auto', instrumentName: 'BTC-PERPETUAL', strategies: AVAILABLE_STRATEGIES, linkedStrategies: [] },
-        { id: 'card-2', title: 'BOT 2', status: 'analyzing', mode: 'manual', instrumentName: 'ETH-PERPETUAL', strategies: AVAILABLE_STRATEGIES, linkedStrategies: [] },
-        { id: 'card-3', title: 'BOT 3', status: 'analyzing', mode: 'auto', instrumentName: 'SOL-PERPETUAL', strategies: AVAILABLE_STRATEGIES, linkedStrategies: [] }
-      ];
-      setTradingCards(initial);
-
-      // Fetch live mapping from API (env-configurable) and merge
-      (async () => {
-        try {
-          const res = await fetch('/api/strategy/bots', { cache: 'no-store' });
-          const data = await res.json().catch(() => ({}));
-          if (res.ok && data && data.ok && Array.isArray(data.bots)) {
-            type ApiBot = { id?: string; instrumentName?: string };
-            setTradingCards(prev => prev.map(card => {
-              const found = (data.bots as ApiBot[]).find((b) => b.id === card.id);
-              return found && found.instrumentName
-                ? { ...card, instrumentName: String(found.instrumentName) }
-                : card;
-            }));
-          }
-        } catch (e) {
-          // Silent fail; UI houdt default instrumenten aan
-          console.warn('Kon bot mapping niet laden', e);
-        }
-      })();
     }
   }, [mode, demoCards]);
+
+  useEffect(() => {
+    if (mode !== 'live') {
+      return;
+    }
+
+    const currentStrategies = strategiesRef.current;
+    const initial: TradingCardData[] = [
+      { id: 'card-1', title: 'BOT 1', status: 'analyzing', mode: 'auto', instrumentName: 'BTC-PERPETUAL', strategies: currentStrategies, linkedStrategies: [] },
+      { id: 'card-2', title: 'BOT 2', status: 'analyzing', mode: 'manual', instrumentName: 'ETH-PERPETUAL', strategies: currentStrategies, linkedStrategies: [] },
+      { id: 'card-3', title: 'BOT 3', status: 'analyzing', mode: 'auto', instrumentName: 'SOL-PERPETUAL', strategies: currentStrategies, linkedStrategies: [] }
+    ];
+    setTradingCards(initial);
+
+    (async () => {
+      try {
+        const res = await fetch('/api/strategy/bots', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data && data.ok && Array.isArray(data.bots)) {
+          type ApiBot = { id?: string; instrumentName?: string };
+          setTradingCards(prev => prev.map(card => {
+            const found = (data.bots as ApiBot[]).find((b) => b.id === card.id);
+            return found && found.instrumentName
+              ? { ...card, instrumentName: String(found.instrumentName) }
+              : card;
+          }));
+        }
+      } catch (e) {
+        console.warn('Kon bot mapping niet laden', e);
+      }
+    })();
+  }, [mode]);
+
+  useEffect(() => {
+    setTradingCards(prev => prev.map(card => {
+      const mapStrategy = (strategy?: Strategy | null) => {
+        if (!strategy) return undefined;
+        return strategies.find((s) => s.id === strategy.id) || strategy;
+      };
+      const nextLinked = card.linkedStrategies
+        .map((s) => mapStrategy(s))
+        .filter((s): s is Strategy => Boolean(s));
+      const nextActive = mapStrategy(card.activeStrategy) || nextLinked[0];
+      const nextSetup = card.setup
+        ? { ...card.setup, strategy: mapStrategy(card.setup.strategy) || card.setup.strategy }
+        : undefined;
+      return {
+        ...card,
+        strategies,
+        linkedStrategies: nextLinked,
+        activeStrategy: nextActive,
+        setup: nextSetup
+      };
+    }));
+  }, [strategies]);
 
   // Strategy info modal
   const [showStrategyModal, setShowStrategyModal] = useState(false);
@@ -331,52 +399,142 @@ export default function DashboardPage() {
     return `${baseTitle} ${period.name.toUpperCase()}`;
   };
 
+  const resolveStrategy = useCallback((strategy?: Strategy | null) => {
+    if (!strategy) return undefined;
+    return strategies.find((s) => s.id === strategy.id) || strategy;
+  }, [strategies]);
+
   // Trading card handlers
   const handleModeChange = (cardId: string, mode: TradingMode) => {
-    setTradingCards(prev => prev.map(card => 
+    setTradingCards(prev => prev.map(card =>
       card.id === cardId ? { ...card, mode } : card
     ));
     touchLastUpdated();
   };
 
   const handleStrategyChange = (cardId: string, strategy: Strategy) => {
-    setTradingCards(prev => prev.map(card => 
-      card.id === cardId ? { ...card, activeStrategy: strategy } : card
-    ));
+    setTradingCards(prev => prev.map(card => {
+      if (card.id !== cardId) return card;
+      const resolved = resolveStrategy(strategy);
+      const nextSetup = card.setup
+        ? { ...card.setup, strategy: resolved ?? card.setup.strategy }
+        : card.setup;
+      return {
+        ...card,
+        activeStrategy: resolved,
+        setup: nextSetup
+      };
+    }));
     touchLastUpdated();
   };
 
-  const handleLinkStrategies = (cardId: string, strategies: Strategy[]) => {
-    setTradingCards(prev => prev.map(card => 
-      card.id === cardId ? { ...card, linkedStrategies: strategies } : card
-    ));
+  const handleLinkStrategies = (cardId: string, nextStrategies: Strategy[]) => {
+    const canonicalList = nextStrategies
+      .map(strategy => resolveStrategy(strategy))
+      .filter((strategy): strategy is Strategy => Boolean(strategy));
+
+    setTradingCards(prev => prev.map(card => {
+      if (card.id !== cardId) return card;
+      const currentActive = card.activeStrategy ? resolveStrategy(card.activeStrategy) : undefined;
+      const nextActive = currentActive && canonicalList.some((s) => s.id === currentActive.id)
+        ? currentActive
+        : canonicalList[0] ?? currentActive;
+      const nextSetup = card.setup
+        ? { ...card.setup, strategy: nextActive ?? resolveStrategy(card.setup.strategy) ?? card.setup.strategy }
+        : card.setup;
+      return {
+        ...card,
+        linkedStrategies: canonicalList,
+        activeStrategy: nextActive ?? undefined,
+        setup: nextSetup
+      };
+    }));
     touchLastUpdated();
   };
 
-  const handlePlaceTrade = (cardId: string, setup: TradingSetup) => {
-    // Simulate placing the trade
-    console.log(`Placing trade for ${cardId}:`, setup);
-    
-    // Update card to active status
-    setTradingCards(prev => prev.map(card => 
-      card.id === cardId ? { 
-        ...card, 
-        status: 'active' as TradingStatus,
-        setup: { ...setup, unrealizedPnl: 0 }
-      } : card
+  const handlePlaceTrade = useCallback(async (cardId: string, setup: TradingSetup) => {
+    setTradingCards(prev => prev.map(card =>
+      card.id === cardId ? { ...card, error: undefined } : card
     ));
-    touchLastUpdated();
-  };
+
+    const card = tradingCards.find((c) => c.id === cardId);
+
+    try {
+      if (!card) {
+        throw new Error('Onbekende trading card.');
+      }
+
+      if (mode === 'live') {
+        const instrumentName = card.instrumentName;
+        if (!instrumentName) {
+          throw new Error('Geen instrument gekoppeld aan deze bot.');
+        }
+
+        const amount = Math.abs(setup.positionSize);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          throw new Error('Ongeldige positie-grootte voor order.');
+        }
+
+        const direction = setup.positionSize >= 0 ? 'buy' : 'sell';
+        const body: Record<string, unknown> = {
+          instrumentName,
+          direction,
+          amount,
+          type: 'limit',
+          timeInForce: 'good_til_cancelled'
+        };
+
+        if (Number.isFinite(setup.entry) && setup.entry > 0) {
+          body.price = Number(setup.entry);
+        } else {
+          body.type = 'market';
+        }
+
+        const res = await fetch('/api/deribit/place-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok !== true) {
+          throw new Error((data && data.error) || `HTTP ${res.status}`);
+        }
+      }
+
+      setTradingCards(prev => prev.map(card =>
+        card.id === cardId ? {
+          ...card,
+          status: 'active' as TradingStatus,
+          setup: {
+            ...setup,
+            strategy: resolveStrategy(setup.strategy) ?? setup.strategy,
+            unrealizedPnl: 0,
+            timestamp: new Date()
+          },
+          error: undefined
+        } : card
+      ));
+      touchLastUpdated();
+    } catch (error) {
+      const message = (error as { message?: string })?.message || 'Kon trade niet plaatsen';
+      setTradingCards(prev => prev.map(card =>
+        card.id === cardId ? { ...card, error: message } : card
+      ));
+      touchLastUpdated();
+      throw new Error(message);
+    }
+  }, [mode, resolveStrategy, touchLastUpdated, tradingCards]);
 
   const handleSkipTrade = (cardId: string, setup: TradingSetup) => {
     console.log(`Skipping trade for ${cardId}:`, setup);
-    
+
     // Reset card to analyzing status
-    setTradingCards(prev => prev.map(card => 
-      card.id === cardId ? { 
-        ...card, 
+    setTradingCards(prev => prev.map(card =>
+      card.id === cardId ? {
+        ...card,
         status: 'analyzing' as TradingStatus,
-        setup: undefined
+        setup: undefined,
+        error: undefined
       } : card
     ));
     touchLastUpdated();
@@ -402,11 +560,12 @@ export default function DashboardPage() {
       }
     }
     stopBot(cardId);
-    setTradingCards(prev => prev.map(card => 
-      card.id === cardId ? { 
-        ...card, 
+    setTradingCards(prev => prev.map(card =>
+      card.id === cardId ? {
+        ...card,
         status: 'stopped' as TradingStatus,
-        setup: undefined
+        setup: undefined,
+        error: undefined
       } : card
     ));
     touchLastUpdated();
@@ -415,10 +574,11 @@ export default function DashboardPage() {
   const handleStart = (cardId: string) => {
     console.log(`Starting card ${cardId}`);
     startBot(cardId);
-    setTradingCards(prev => prev.map(card => 
-      card.id === cardId ? { 
-        ...card, 
-        status: 'analyzing' as TradingStatus
+    setTradingCards(prev => prev.map(card =>
+      card.id === cardId ? {
+        ...card,
+        status: 'analyzing' as TradingStatus,
+        error: undefined
       } : card
     ));
     touchLastUpdated();
@@ -467,12 +627,21 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="text-center pt-1">
                 <Metric
-                  value={typeof balance === 'number' ? balance : '---'}
+                  value={mode === 'demo'
+                    ? balance
+                    : balanceLoading
+                    ? '...'
+                    : typeof balance === 'number'
+                    ? balance
+                    : '---'}
                   trend="neutral"
                   currency="USDC"
                   showLabel={false}
                   size="sm"
                 />
+                {balanceError && mode === 'live' && (
+                  <p className="mt-1 text-[10px] text-red-300">{balanceError}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -544,6 +713,27 @@ export default function DashboardPage() {
 
     {/* Section spacer: iets compacter om meer ruimte voor card-inhoud te maken */}
   <SectionSpacer gap="sm" className="-mt-2" />
+
+        {/* Strategy status */}
+        {(strategiesError || strategiesLoading || customStrategies.length > 0) && (
+          <div className="mb-4 space-y-2 text-xs">
+            {strategiesLoading && !strategiesError && (
+              <div className="text-white/60">Strategieën laden…</div>
+            )}
+            {strategiesError && (
+              <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-amber-200">
+                {strategiesError}
+              </div>
+            )}
+            {!strategiesError && !strategiesLoading && customStrategies.length > 0 && (
+              <div className="text-white/70">
+                {customStrategies.length === 1
+                  ? '1 custom strategy geladen'
+                  : `${customStrategies.length} custom strategies geladen`}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Trading Cards Container */}
         <div>

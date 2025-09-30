@@ -99,8 +99,6 @@ export default function Header({ className }: HeaderProps) {
   };
 
   useEffect(() => {
-    let cancelled = false;
-
     if (mode === 'live') {
       // Initial check
       hasInitialCheckedRef.current = true;
@@ -108,7 +106,6 @@ export default function Header({ className }: HeaderProps) {
       // Poll periodically without flashing connecting
       const id = setInterval(() => runConnectivityCheck(true), 10000);
       return () => {
-        cancelled = true;
         clearInterval(id);
       };
     } else {
@@ -116,7 +113,6 @@ export default function Header({ className }: HeaderProps) {
       setConnectionStatus('demo');
       setConnectionError(null);
       return () => {
-        cancelled = true;
       };
     }
   }, [mode]);
@@ -474,7 +470,6 @@ export default function Header({ className }: HeaderProps) {
           const total = Array.isArray(results) ? results.length : 0;
           type StopItem = { ok?: boolean } & Record<string, unknown>;
           const okCount = Array.isArray(results) ? (results as StopItem[]).filter((r) => !!r.ok).length : 0;
-          const failCount = total - okCount;
           return (
             <div className="space-y-4">
               {stopResult?.ok ? (

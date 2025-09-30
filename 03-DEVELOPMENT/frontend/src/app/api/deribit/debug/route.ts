@@ -1,5 +1,3 @@
-import { NextRequest } from 'next/server';
-
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -8,7 +6,7 @@ function fileExists(path?: string) {
   return Boolean(path);
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const env = (process.env.DERIBIT_ENV || 'prod').toLowerCase();
   const isTest = env === 'test' || env === 'testnet';
 
