@@ -15,7 +15,7 @@ export default defineConfig({
     tailwindcss(),
     // DO NOT REMOVE
     createIconImportProxy() as PluginOption,
-    sparkPlugin() as PluginOption,
+    sparkPlugin() as PluginOption, // Re-enabled - Spark plugin forces port 5000, overridden in server config below
   ],
   resolve: {
     alias: {
@@ -24,7 +24,8 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0', // Listen on all network interfaces
-    port: 5000,
+    port: 5173, // STANDARD PORT - macOS uses 5000 for AirPlay/Control Center
+    strictPort: false, // Allow fallback if needed (Spark plugin might interfere)
     watch: {
       // Ignore backend files that change frequently
       ignored: [

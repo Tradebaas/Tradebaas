@@ -34,6 +34,8 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 - **Frontend (Operator Dashboard)**
   - Pad: `src/…`
   - Stack: React + TypeScript + Vite + Zustand + shadcn/ui.
+  - **Port: 5173** (STRICT - Vite default, strictPort enabled)
+  - **Access:** http://localhost:5173
   - Rol:
     - UI voor connectie met Deribit.
     - Strategie-selectie & start/stop.
@@ -42,6 +44,8 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 - **Backend (24/7 Engine)**
   - Pad: `backend/src/…`
   - Stack: Node + TypeScript + Fastify + WebSocket.
+  - **Port: 3000** (productie/development)
+  - **Access:** http://localhost:3000
   - Rol:
     - Deribit-API integratie (server-side).
     - Strategie-executie (o.a. Razor) met echte orders.
@@ -642,6 +646,20 @@ git diff              # Geen commented code, logs, of orphaned imports
 6. Is documentatie bijgewerkt?
 
 ### 6.5 Deployment & State Management
+
+**📡 PORT ASSIGNMENTS (STRICT - NO DEVIATIONS):**
+- **Frontend Development:** Port **5173** ALWAYS (Vite default)
+  - Configured in `vite.config.ts` with `strictPort: true`
+  - Fails if port 5173 unavailable (doesn't fallback)
+  - Kill conflicting processes: `lsof -ti:5173 | xargs kill -9`
+  - **NOTE:** Port 5000 is RESERVED by macOS for AirPlay/Control Center - DO NOT USE
+- **Backend Development:** Port **3000** (with tsx watch) or **3001** (legacy)
+  - Configured in `backend/src/server.ts`
+  - Uses env var `PORT` if set, defaults to 3000
+- **Backend Production:** Port **3000**
+  - PM2 configuration in `config/ecosystem.config.cjs`
+- **WebSocket:** Same port as backend (3000/3001)
+  - Path: `/ws`
 
 **State Files Locaties:**
 - Backend state: `state/backend-state.json` (NOT in backend/ of root!)
