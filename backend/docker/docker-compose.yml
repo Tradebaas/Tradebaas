@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.orchestrator
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+    depends_on:
+      - redis
+    ports:
+      - "3001:3001"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+      - USER_ID=${USER_ID}
+      - STRATEGY_ID=${STRATEGY_ID}
+      - BROKER_ID=${BROKER_ID}
+      - API_KEY=${API_KEY}
+      - API_SECRET=${API_SECRET}
+    depends_on:
+      - redis
+    deploy:
+      replicas: 3
+
+volumes:
+  redis-data:

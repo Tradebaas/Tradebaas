@@ -1,0 +1,529 @@
+import { IBroker, Credentials, Balance, Order, Trade, Candle, PlaceOrderParams } from './IBroker';
+import { BackendDeribitClient, DeribitEnvironment } from '../deribit-client';
+
+// Custom error classes for better error handling
+export class OrderValidationError extends Error {
+  constructor(message: string, public code: string, public details?: any) {
+    super(message);
+    this.name = 'OrderValidationError';
+  }
+}
+
+export class InsufficientMarginError extends OrderValidationError {
+  constructor(required: number, available: number) {
+    super(
+      `Insufficient margin: required ${required.toFixed(2)}, available ${available.toFixed(2)}`,
+      'INSUFFICIENT_MARGIN',
+      { required, available }
+    );
+  }
+}
+
+export class LeverageExceededError extends OrderValidationError {
+  constructor(calculated: number, max: number) {
+    super(
+      `Leverage exceeded: calculated ${calculated.toFixed(2)}x, maximum ${max}x`,
+      'LEVERAGE_EXCEEDED',
+      { calculated, max }
+    );
+  }
+}
+
+const MAX_LEVERAGE = 50; // Safety limit: never exceed 50x leverage
+const LEVERAGE_WARNING_THRESHOLD = 10; // Warn if leverage >10x
+
+export class DeribitBroker implements IBroker {
+  private client: BackendDeribitClient;
+  private connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected';
+  private instrumentCache: Map<string, {
+    minTradeAmount: number;
+    tickSize: number;
+    maxLeverage: number;
+    contractSize: number;
+    cachedAt: number;
+  }> = new Map();
+  
+  private readonly CACHE_TTL = 3600000; // 1 hour cache for instrument info
+
+  constructor() {
+    this.client = new BackendDeribitClient('live');
+  }
+
+  async connect(credentials: Credentials): Promise<void> {
+    try {
+      this.connectionStatus = 'connecting';
+      const env: DeribitEnvironment = credentials.testnet ? 'testnet' : 'live';
+      this.client = new BackendDeribitClient(env);
+      
+      await this.client.connect({
+        apiKey: credentials.apiKey,
+        apiSecret: credentials.apiSecret,
+      });
+      
+      this.connectionStatus = 'connected';
+      console.log(`[DeribitBroker] Connected to ${env}`);
+    } catch (error) {
+      this.connectionStatus = 'error';
+      console.error('[DeribitBroker] Connection failed:', error);
+      throw error;
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    await this.client.disconnect();
+    this.connectionStatus = 'disconnected';
+    console.log('[DeribitBroker] Disconnected');
+  }
+
+  getConnectionStatus(): 'disconnected' | 'connecting' | 'connected' | 'error' {
+    return this.connectionStatus;
+  }
+
+  async getBalance(currency?: string): Promise<Balance[]> {
+    const curr = currency || 'BTC';
+    const summary = await this.client.getAccountSummary(curr);
+    
+    return [{
+      currency: curr,
+      available: summary.available_funds,
+      total: summary.equity,
+      locked: summary.equity - summary.available_funds,
+    }];
+  }
+
+  /**
+   * Pre-flight validation: Check all order parameters before submission
+   * This is BROKER-001: Order Validation
+   */
+  private async validateOrder(params: PlaceOrderParams): Promise<void> {
+    const { instrument, amount, price, type } = params;
+
+    // 1. Get instrument info (cached)
+    const info = await this.getInstrumentInfoCached(instrument);
+
+    // 2. Validate quantity (min/max, lot size)
+    if (amount < info.minTradeAmount) {
+      throw new OrderValidationError(
+        `Amount ${amount} below minimum ${info.minTradeAmount} for ${instrument}`,
+        'AMOUNT_TOO_SMALL',
+        { amount, minTradeAmount: info.minTradeAmount }
+      );
+    }
+
+    // Round to lot size (amountStep)
+    const roundedAmount = Math.round(amount / info.minTradeAmount) * info.minTradeAmount;
+    if (Math.abs(roundedAmount - amount) > 0.0001) {
+      console.warn(`[DeribitBroker] Amount ${amount} rounded to ${roundedAmount} (lot size: ${info.minTradeAmount})`);
+    }
+
+    // 3. Validate price (tick size) - only for limit orders
+    if (type === 'limit' && price) {
+      const roundedPrice = Math.round(price / info.tickSize) * info.tickSize;
+      if (Math.abs(roundedPrice - price) > 0.0001) {
+        console.warn(`[DeribitBroker] Price ${price} rounded to ${roundedPrice} (tick size: ${info.tickSize})`);
+      }
+    }
+
+    // 4. Validate leverage (calculate required leverage)
+    const balance = await this.getBalance();
+    const availableBTC = balance[0].available;
+
+    if (price) {
+      // Convert BTC balance to USD value using current price
+      // For Deribit perpetuals: amount is in USD, balance is in BTC
+      const availableFundsUSD = availableBTC * price;
+      
+      // Notional value in USD (amount is already in USD for Deribit perpetuals)
+      const notionalValue = amount;
+      
+      // Calculate required margin at max leverage
+      const requiredMargin = notionalValue / info.maxLeverage;
+      
+      // Calculate actual leverage for this order
+      const actualLeverage = notionalValue / availableFundsUSD;
+
+      console.log(`[DeribitBroker] 💰 Balance: ${availableBTC.toFixed(4)} BTC = $${availableFundsUSD.toFixed(2)} @ $${price.toFixed(2)}/BTC`);
+      console.log(`[DeribitBroker] 📊 Order: ${notionalValue} USD notional, ${actualLeverage.toFixed(4)}x leverage`);
+
+      // Safety check: never exceed MAX_LEVERAGE (50x)
+      if (actualLeverage > MAX_LEVERAGE) {
+        throw new LeverageExceededError(actualLeverage, MAX_LEVERAGE);
+      }
+
+      // Warning: leverage >10x
+      if (actualLeverage > LEVERAGE_WARNING_THRESHOLD) {
+        console.warn(`[DeribitBroker] ⚠️  High leverage: ${actualLeverage.toFixed(2)}x`);
+      }
+
+      // 5. Validate margin requirements
+      if (availableFundsUSD < requiredMargin) {
+        throw new InsufficientMarginError(requiredMargin, availableFundsUSD);
+      }
+
+      console.log(`[DeribitBroker] ✅ Validation passed`);
+    }
+  }
+
+  /**
+   * Get instrument info with caching (1 hour TTL)
+   */
+  private async getInstrumentInfoCached(instrument: string): Promise<{
+    minTradeAmount: number;
+    tickSize: number;
+    maxLeverage: number;
+    contractSize: number;
+    cachedAt: number;
+  }> {
+    const cached = this.instrumentCache.get(instrument);
+    const now = Date.now();
+
+    if (cached && now - cached.cachedAt < this.CACHE_TTL) {
+      return cached;
+    }
+
+    // Fetch from Deribit API
+    const info = await this.client.getInstrument(instrument);
+
+    const data = {
+      minTradeAmount: info.min_trade_amount,
+      tickSize: info.tick_size,
+      maxLeverage: info.max_leverage || 50,
+      contractSize: info.contract_size,
+      cachedAt: now,
+    };
+
+    this.instrumentCache.set(instrument, data);
+    console.log(`[DeribitBroker] Cached instrument info for ${instrument}:`, data);
+
+    return data;
+  }
+
+  async placeOrder(params: PlaceOrderParams): Promise<Order> {
+    const { instrument, side, type, amount, price, otocoConfig, reduceOnly, label } = params;
+
+    // BROKER-001: Pre-flight validation
+    await this.validateOrder(params);
+
+    let response;
+
+    try {
+      // BROKER-002: Atomic OCO placement (if OTOCO config provided)
+      if (otocoConfig) {
+        response = await this.placeOCOOrder(params);
+      } else {
+        // Simple order (no OTOCO)
+        response = await this.placeSingleOrder(params);
+      }
+
+      console.log(`[DeribitBroker] ✅ Order placed: ${response.order_id}`);
+
+      return {
+        orderId: response.order_id,
+        instrument,
+        side,
+        type,
+        amount,
+        price,
+        filled: 0,
+        status: response.order_state === 'filled' ? 'filled' : 'open',
+        timestamp: Date.now(),
+        label,
+      };
+    } catch (error) {
+      console.error(`[DeribitBroker] ❌ Order placement failed:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Place a single order without OCO
+   */
+  private async placeSingleOrder(params: PlaceOrderParams): Promise<any> {
+    const { instrument, side, type, amount, price, reduceOnly, label } = params;
+
+    const order = {
+      instrument_name: instrument,
+      amount,
+      type: type as 'limit' | 'market' | 'stop_market',
+      direction: side,
+      price,
+      reduce_only: reduceOnly,
+      label,
+    };
+
+    return await this.client.placeOrder(order);
+  }
+
+  /**
+   * BROKER-002: Place OCO order (entry + SL + TP atomically)
+   * 
+   * Strategy:
+   * 1. Place entry order with unique label
+   * 2. Immediately place SL order linked to entry (reduce_only=true)
+   * 3. Immediately place TP order linked to entry (reduce_only=true)
+   * 4. All orders use same transaction ID for tracking
+   * 5. Timeout: 5 seconds max for entire operation
+   * 6. Rollback: if any step fails, cancel all placed orders
+   */
+  private async placeOCOOrder(params: PlaceOrderParams): Promise<any> {
+    const { instrument, side, type, amount, price, otocoConfig, label } = params;
+    
+    if (!otocoConfig) {
+      throw new Error('otocoConfig required for OCO orders');
+    }
+
+    const startTime = Date.now();
+    const timeout = 5000; // 5 seconds max
+    const transactionId = `oco-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const entryLabel = label || `entry-${transactionId}`;
+    const slLabel = `sl-${transactionId}`;
+    const tpLabel = `tp-${transactionId}`;
+
+    console.log(`[DeribitBroker] 🔄 Starting OCO placement: ${transactionId}`);
+    console.log(`[DeribitBroker]   Entry: ${side} ${amount} @ ${price}`);
+    console.log(`[DeribitBroker]   SL: ${otocoConfig.stopLoss?.triggerPrice}`);
+    console.log(`[DeribitBroker]   TP: ${otocoConfig.takeProfit?.price}`);
+
+    const placedOrders: string[] = [];
+
+    try {
+      // Step 1: Place entry order
+      const entryOrder = {
+        instrument_name: instrument,
+        amount,
+        type: type as 'limit' | 'market' | 'stop_market',
+        direction: side,
+        price,
+        label: entryLabel,
+      };
+
+      console.log(`[DeribitBroker] 📝 Placing entry order...`);
+      const entryResponse = await this.client.placeOrder(entryOrder);
+      placedOrders.push(entryResponse.order_id);
+      console.log(`[DeribitBroker] ✅ Entry order placed: ${entryResponse.order_id}`);
+
+      // Check timeout
+      if (Date.now() - startTime > timeout) {
+        throw new Error('OCO placement timeout after entry order');
+      }
+
+      // Step 2: Place Stop-Loss order (opposite side, reduce_only)
+      const slSide = side === 'buy' ? 'sell' : 'buy';
+      const slOrder = {
+        instrument_name: instrument,
+        amount,
+        type: 'stop_market' as const,
+        direction: slSide,
+        trigger_price: otocoConfig.stopLoss?.triggerPrice,
+        reduce_only: true,
+        label: slLabel,
+      };
+
+      console.log(`[DeribitBroker] 📝 Placing SL order...`);
+      const slResponse = await this.client.placeOrder(slOrder);
+      placedOrders.push(slResponse.order_id);
+      console.log(`[DeribitBroker] ✅ SL order placed: ${slResponse.order_id}`);
+
+      // Check timeout
+      if (Date.now() - startTime > timeout) {
+        throw new Error('OCO placement timeout after SL order');
+      }
+
+      // Step 3: Place Take-Profit order (opposite side, reduce_only)
+      const tpSide = side === 'buy' ? 'sell' : 'buy';
+      const tpOrder = {
+        instrument_name: instrument,
+        amount,
+        type: 'limit' as const,
+        direction: tpSide,
+        price: otocoConfig.takeProfit?.price,
+        reduce_only: true,
+        label: tpLabel,
+      };
+
+      console.log(`[DeribitBroker] 📝 Placing TP order...`);
+      const tpResponse = await this.client.placeOrder(tpOrder);
+      placedOrders.push(tpResponse.order_id);
+      console.log(`[DeribitBroker] ✅ TP order placed: ${tpResponse.order_id}`);
+
+      const duration = Date.now() - startTime;
+      console.log(`[DeribitBroker] ✅ OCO placement complete in ${duration}ms`);
+      console.log(`[DeribitBroker]   Entry: ${entryResponse.order_id}`);
+      console.log(`[DeribitBroker]   SL: ${slResponse.order_id}`);
+      console.log(`[DeribitBroker]   TP: ${tpResponse.order_id}`);
+
+      // Return entry order response (OCO orders are linked via labels)
+      return entryResponse;
+
+    } catch (error) {
+      console.error(`[DeribitBroker] ❌ OCO placement failed:`, error);
+      
+      // BROKER-003: Rollback - cancel all placed orders
+      if (placedOrders.length > 0) {
+        console.warn(`[DeribitBroker] 🔄 Rolling back ${placedOrders.length} orders...`);
+        await this.rollbackOrders(placedOrders, instrument, transactionId);
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * BROKER-003: Rollback orders on OCO placement failure
+   * Cancels orders in reverse order (TP -> SL -> Entry)
+   */
+  private async rollbackOrders(orderIds: string[], instrument: string, transactionId: string): Promise<void> {
+    console.log(`[DeribitBroker] 🔄 Rollback starting for transaction ${transactionId}`);
+    
+    // Cancel in reverse order
+    const reversedIds = [...orderIds].reverse();
+    
+    for (const orderId of reversedIds) {
+      try {
+        await this.client.cancelOrder(orderId);
+        console.log(`[DeribitBroker] ✅ Rolled back order: ${orderId}`);
+      } catch (cancelError) {
+        console.error(`[DeribitBroker] ⚠️  Failed to cancel order ${orderId} during rollback:`, cancelError);
+        // Continue with remaining cancellations (orphan cleanup will handle this)
+      }
+    }
+    
+    console.log(`[DeribitBroker] ✅ Rollback complete for transaction ${transactionId}`);
+  }
+
+    };
+
+    let response;
+
+    try {
+      // BROKER-002: Atomic OCO placement (if OTOCO config provided)
+      if (otocoConfig) {
+        console.log(`[DeribitBroker] Placing OCO order: entry + SL + TP`);
+        
+        // For now, place entry order (OTOCO will be implemented in BROKER-002)
+        // This is a placeholder - full atomic OCO implementation coming next
+        response = await this.client.placeOrder(order);
+        
+        console.log(`[DeribitBroker] ⚠️  OCO orders not yet implemented - entry order placed only`);
+        console.log(`[DeribitBroker] TODO: Implement atomic SL+TP placement in BROKER-002`);
+      } else {
+        // Simple order (no OTOCO)
+        response = await this.client.placeOrder(order);
+      }
+
+      console.log(`[DeribitBroker] ✅ Order placed: ${response.order_id}`);
+
+      return {
+        orderId: response.order_id,
+        instrument,
+        side,
+        type,
+        amount,
+        price,
+        filled: 0,
+        status: response.order_state === 'filled' ? 'filled' : 'open',
+        timestamp: Date.now(),
+        label,
+      };
+    } catch (error) {
+      console.error(`[DeribitBroker] ❌ Order placement failed:`, error);
+      throw error;
+    }
+  }
+
+  async cancelOrder(orderId: string, instrument: string): Promise<void> {
+    await this.client.cancelOrder(orderId);
+    console.log(`[DeribitBroker] ✅ Order canceled: ${orderId}`);
+  }
+
+  async cancelAllOrders(instrument?: string): Promise<void> {
+    // BackendDeribitClient doesn't have cancelAllOrders yet
+    // Get all open orders and cancel them individually
+    const orders = await this.getOpenOrders(instrument);
+    
+    for (const order of orders) {
+      await this.cancelOrder(order.orderId, order.instrument);
+    }
+    
+    console.log(`[DeribitBroker] ✅ All orders canceled (${orders.length} orders)`);
+  }
+
+  async getOrder(orderId: string, instrument: string): Promise<Order> {
+    // Not implemented in BackendDeribitClient yet
+    throw new Error('getOrder not implemented yet');
+  }
+
+  async getOpenOrders(instrument?: string): Promise<Order[]> {
+    if (!instrument) {
+      throw new Error('Instrument required for getOpenOrders');
+    }
+
+    const response = await this.client.getOpenOrders(instrument);
+    
+    return response.map(order => ({
+      orderId: order.order_id,
+      instrument: order.instrument_name,
+      side: order.direction as 'buy' | 'sell',
+      type: 'limit',
+      amount: order.amount,
+      price: order.price,
+      filled: order.filled_amount || 0,
+      status: this.mapOrderState(order.order_state),
+      timestamp: order.creation_timestamp || Date.now(),
+      label: order.label,
+      ocoRef: order.oco_ref,
+    }));
+  }
+
+  async getCandles(instrument: string, timeframe: string, limit: number = 50): Promise<Candle[]> {
+    // Not implemented in BackendDeribitClient yet
+    throw new Error('getCandles not implemented yet - use TradingView data');
+  }
+
+  async subscribeTrades(instrument: string, callback: (trade: Trade) => void): Promise<void> {
+    // Not implemented in BackendDeribitClient yet
+    throw new Error('subscribeTrades not implemented yet');
+  }
+
+  async subscribeOrders(instrument: string, callback: (order: Order) => void): Promise<void> {
+    // Not implemented in BackendDeribitClient yet
+    throw new Error('subscribeOrders not implemented yet');
+  }
+
+  async unsubscribe(channel: string): Promise<void> {
+    // Not implemented in BackendDeribitClient yet
+    throw new Error('unsubscribe not implemented yet');
+  }
+
+  async getInstrumentInfo(instrument: string): Promise<{
+    minTradeAmount: number;
+    tickSize: number;
+    maxLeverage: number;
+    amountStep: number;
+  }> {
+    const info = await this.getInstrumentInfoCached(instrument);
+    
+    return {
+      minTradeAmount: info.minTradeAmount,
+      tickSize: info.tickSize,
+      maxLeverage: Math.min(info.maxLeverage, MAX_LEVERAGE), // Never report >50x
+      amountStep: info.minTradeAmount,
+    };
+  }
+
+  private mapOrderState(state: string): 'open' | 'filled' | 'cancelled' | 'rejected' {
+    switch (state) {
+      case 'open':
+      case 'untriggered':
+        return 'open';
+      case 'filled':
+        return 'filled';
+      case 'cancelled':
+        return 'cancelled';
+      case 'rejected':
+        return 'rejected';
+      default:
+        return 'open';
+    }
+  }
+}

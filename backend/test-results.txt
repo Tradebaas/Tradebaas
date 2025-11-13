@@ -1,0 +1,38 @@
+
+> tradebaas-backend@1.0.0 test
+> vitest run oco-lifecycle
+
+
+[1m[46m RUN [49m[22m [36mv4.0.6 [39m[90m/root/tradebaas/backend[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/oco-lifecycle.integration.test.ts[2m [ tests/oco-lifecycle.integration.test.ts ][22m
+[31m[1mError[22m: Transform failed with 1 error:
+/root/tradebaas/backend/src/brokers/DeribitBroker.ts:432:2: ERROR: Unexpected "}"[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36m/root/tradebaas/backend/src/brokers/DeribitBroker.ts[39m:432:2
+[33m  
+  Unexpected "}"
+  430 |        throw error;
+  431 |      }
+  432 |    }
+      |    ^
+  433 |  
+  434 |    async cancelOrder(orderId: string, instrument: string): Promise<void> {
+  [39m
+[90m [2m❯[22m failureErrorWithLog node_modules/esbuild/lib/main.js:[2m1467:15[22m[39m
+[90m [2m❯[22m node_modules/esbuild/lib/main.js:[2m736:50[22m[39m
+[90m [2m❯[22m responseCallbacks.<computed> node_modules/esbuild/lib/main.js:[2m603:9[22m[39m
+[90m [2m❯[22m handleIncomingPacket node_modules/esbuild/lib/main.js:[2m658:12[22m[39m
+[90m [2m❯[22m Socket.readFromStdout node_modules/esbuild/lib/main.js:[2m581:7[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [2mno tests[22m
+[2m   Start at [22m 20:49:20
+[2m   Duration [22m 267ms[2m (transform 86ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 10ms)[22m
+

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "strategyName": "ema-rsi-scalper",
+  "instrument": "BTC-PERPETUAL",
+  "state": "ANALYZING",
+  "startedAt": 1763064051962,
+  "lastTransition": 1763064051962,
+  "positionEntryPrice": null,
+  "positionSize": null,
+  "positionSide": null,
+  "metadata": {}
+}

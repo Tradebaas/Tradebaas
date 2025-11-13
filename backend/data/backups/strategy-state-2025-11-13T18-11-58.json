@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "strategyName": "TestStrategy",
+  "instrument": "BTC-PERPETUAL",
+  "state": "POSITION_OPEN",
+  "startedAt": 1763057517813,
+  "lastTransition": 1763057518232,
+  "positionEntryPrice": 50000,
+  "positionSize": 100,
+  "positionSide": "long",
+  "metadata": {
+    "iteration": 31
+  }
+}

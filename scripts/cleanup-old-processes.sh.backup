@@ -1,0 +1,26 @@
+#!/bin/bash
+# Cleanup old backend processes that are not managed by PM2
+
+echo "🔍 Checking for old backend processes..."
+
+# Find all tsx/node processes running server.ts that are NOT managed by PM2
+OLD_PROCESSES=$(ps aux | grep -E "tsx.*server\.ts" | grep -v "PM2" | grep -v grep | awk '{print $2}')
+
+if [ -z "$OLD_PROCESSES" ]; then
+  echo "✅ No old processes found"
+else
+  echo "🗑️  Found old processes to kill:"
+  ps aux | grep -E "tsx.*server\.ts" | grep -v "PM2" | grep -v grep
+  
+  echo ""
+  echo "Killing old processes: $OLD_PROCESSES"
+  for PID in $OLD_PROCESSES; do
+    kill -9 $PID 2>/dev/null && echo "  ✓ Killed process $PID"
+  done
+  
+  echo "✅ Cleanup complete"
+fi
+
+echo ""
+echo "📊 Current PM2 processes:"
+pm2 list
