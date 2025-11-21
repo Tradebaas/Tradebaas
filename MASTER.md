@@ -25,7 +25,16 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 >   - Manual disconnect requirement gehandhaafd
 >   - Geschatte tijd: 3-4 weken fulltime (6-8 weken part-time)
 >
->**📅 RECENT UPDATES (16 nov 2025):**
+>**📅 RECENT UPDATES (21 nov 2025):**
+> - ✅ **PRODUCTION DEPLOYMENT:** App live op https://app.tradebazen.nl (Nginx + SSL + PM2)
+> - ✅ **SSL Certificates:** Let's Encrypt SSL installed, auto-renewal configured, expires 19 Feb 2026
+> - ✅ **PM2 Auto-Start:** Frontend configured voor automatic restart on boot
+> - ✅ **Graceful Degradation:** Frontend toont vriendelijke warnings wanneer backend offline is
+> - ✅ **Metrics Page Fix:** Backend unavailable errors vervangen door user-friendly messages
+> - ✅ **Strategy Sync:** StrategiesPage nu in sync met StrategyTradingCard (alleen Razor + Thor)
+> - ✅ **Frontend Build:** Production build successful (730KB gzipped, tree-shaking active)
+>
+>**📅 UPDATES (16 nov 2025):**
 > - ✅ Fresh GitHub clone: Complete repo sync vanaf https://github.com/Tradebaas/Tradebaas.git
 > - ✅ Server Migration: Draait nu op dedicated VPS YOUR_SERVER_IP (Ubuntu)
 > - ✅ Backend LIVE: Deribit LIVE credentials configured & getest (33.35 USDC balance)
@@ -101,18 +110,20 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 > - ✅ **Nginx Documentation:** Volledige subdomain setup guide (api/app.tradebazen.nl + SSL)
 > - 🎯 **Production Status:** Klaar voor 24/7 automated trading met complete trade analytics
 >
-> **🎯 CURRENT SYSTEM STATUS (16 nov 2025 - PRODUCTION):**
-> - ✅ **Backend:** PM2 tradebaas-backend running (port 3000, ↺ 5 restarts)
-> - ✅ **Frontend:** PM2 tradebaas-frontend running (port 5000, external access)
-> - ✅ **Database:** SQLite at /root/Tradebaas/state/trades.db (1 open trade synced)
-> - ✅ **Open Position:** BTC_USDC-PERPETUAL LONG 103.656575 @ $93950.50 (Razor strategy)
-> - ✅ **Strategy Status:** position_open (paused, waiting for SL/TP hit)
-> - ✅ **Auto-Fill Working:** Dropdown shows "razor" (database-first, 3s polling)
-> - ✅ **Trade Tracking:** trade_1763322661731_uos6qxhyn in database (manual_sync entry)
-> - ✅ **Enhanced Logging:** Visual boxes, step tracking, emoji indicators deployed
-> - ✅ **Monitoring Tools:** monitor-24-7.sh, MONITORING.md, LOGGING_SUMMARY.md ready
-> - ⏳ **Awaiting:** Position close to validate auto-resume + enhanced logs
-> - 🎯 **24/7 Ready:** Complete autonomous trading cycle with full observability
+> **🎯 CURRENT SYSTEM STATUS (21 nov 2025 - PRODUCTION):**
+> - ✅ **Frontend:** PM2 tradebaas-frontend running (port 5000, accessible via https://app.tradebazen.nl)
+> - ✅ **SSL:** Let's Encrypt certificate valid (expires 19 Feb 2026, auto-renewal configured)
+> - ✅ **Nginx:** Reverse proxy active, HTTP → HTTPS redirect working
+> - ✅ **PM2 Auto-Start:** Frontend configured voor automatic restart on server reboot
+> - ✅ **Graceful Degradation:** Frontend toont vriendelijke warnings bij offline backend
+> - ⚠️ **Backend:** Niet gestart (wacht op SaaS implementation - geen .env credentials)
+> - 📊 **Database:** SQLite at /root/Tradebaas-1/state/trades.db (ready, maar geen data zonder backend)
+> - 🎨 **Frontend Features:**
+>   - Metrics Page: ⚠️ Backend unavailable warnings (user-friendly)
+>   - Strategies Page: ✅ Razor strategy visible (Thor hidden tot implemented)
+>   - Trading Card: ✅ Synced met backend status + database
+> - 🚀 **Next Steps:** SaaS implementatie volgens DOCS/architecture/MULTI_USER_SAAS_PLAN.md
+> - 🎯 **Production Ready:** Frontend live, backend infrastructure configured, wacht op multi-user credentials
 
 ---
 
@@ -547,11 +558,13 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
     - Overzicht van alle beschikbare strategieën met beschrijving.
 - **Metrics & performance**
   - `src/components/metrics/MetricsPage.tsx`
-    - **UPDATED:** Toont live trade statistics en history table
+    - **UPDATED (21 nov 2025):** Toont live trade statistics en history table
+    - **Graceful Degradation:** Vriendelijke warnings wanneer backend offline
     - **TradeStatsCards:** Real-time metrics (win rate, total PnL, avg PnL, best/worst trades)
     - **TradeHistoryTable:** Volledige trade history met filtering op strategy
     - Polled elke 10 seconden voor live updates
   - `src/components/metrics/TradeHistoryTable.tsx`
+    - **UPDATED (21 nov 2025):** Improved error handling voor offline backend
     - **NEW:** Tabel met alle trades (open + closed)
     - Kolommen: Time, Strategy, Instrument, Side, Entry, Exit, Amount, Exit Reason, PnL, Status
     - **Color Coding:** Green voor profit, red voor loss, badges voor SL/TP hits
@@ -562,10 +575,20 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
     - **WARNING INDICATORS:** Yellow alert badge wanneer orphan gedetecteerd
     - **POLLING ORPHAN CHECK:** Elke 10s check voor database-Deribit mismatch
     - **ROBUSTNESS:** Combineert database trades + live position verification
+    - **Offline Mode:** Toont "Backend niet beschikbaar" met AlertTriangle icon
   - `src/components/metrics/TradeStatsCards.tsx`
+    - **UPDATED (21 nov 2025):** Error state tracking voor offline backend
     - **NEW:** Statistics cards met aggregated data
     - Metrics: Total trades, win rate, total/avg PnL, best/worst trade
     - **Auto-refresh:** Elke 10 seconden via `/api/trades/stats`
+    - **Offline Mode:** Toont amber warning "Backend niet beschikbaar"
+  - `src/components/metrics/StrategiesPage.tsx`
+    - **UPDATED (21 nov 2025):** Synchronized met StrategyTradingCard dropdown
+    - **Strategy List:** Alleen Razor (live-ready) + Thor (coming soon, hidden)
+    - **Removed:** Fast Test, EMA-RSI Scalper, Vortex, en andere dummy strategies
+    - **Single Source of Truth:** Toont alleen strategies die werkelijk selecteerbaar zijn
+    - Overzicht van alle beschikbare strategieën met beschrijving
+    - Upload functie voor custom strategies (alleen `canRunLive: true` worden getoond)
   - `src/components/KPICard.tsx`
     - Generieke metric card (legacy).
 - **Connectie & instellingen**
@@ -977,16 +1000,31 @@ git diff              # Geen commented code, logs, of orphaned imports
   ```
 
 **🌐 SUBDOMAIN & SSL SETUP:**
+- **Production URL:** https://app.tradebazen.nl (LIVE sinds 21 nov 2025)
+- **Status:** ✅ Nginx reverse proxy + SSL + PM2 auto-restart configured
 - **Domains:**
-  - `api.tradebazen.nl` → Backend (port 3000)
-  - `app.tradebazen.nl` → Frontend (port 5000)
+  - `app.tradebazen.nl` → Frontend (port 5000) - **LIVE**
+  - `api.tradebazen.nl` → Backend (port 3000) - Configured maar backend draait nog niet
+- **SSL Certificates:**
+  - Provider: Let's Encrypt (via Certbot)
+  - Status: ✅ Valid certificate installed
+  - Expiry: 19 February 2026 (89 days)
+  - Auto-renewal: ✅ Configured via certbot systemd timer
+- **Nginx Configuration:**
+  - Config: `/etc/nginx/sites-available/app.tradebazen.nl`
+  - HTTP → HTTPS redirect: ✅ Active
+  - WebSocket support: ✅ Configured for /ws endpoint
+  - CORS headers: ✅ Configured for backend API
+- **PM2 Process Management:**
+  - Frontend: `tradebaas-frontend` - ✅ Online (auto-restart enabled)
+  - Backend: Not started (waiting for SaaS implementation)
+  - Startup script: ✅ Configured to run on boot
 - **Documentation:** `DOCS/deployment/nginx-subdomain-setup.md`
   - Complete Nginx reverse proxy configuration
   - Let's Encrypt SSL certificate setup
   - DNS A-record instructions
   - Firewall configuration (UFW)
   - Troubleshooting guide
-- **SSL:** Auto-renewal via certbot
 - **HTTP → HTTPS:** Automatic redirect
 
 **State Files Locaties:**

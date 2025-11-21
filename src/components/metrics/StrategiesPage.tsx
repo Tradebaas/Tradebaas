@@ -28,63 +28,8 @@ export interface Strategy {
   canRunLive: boolean;
 }
 
+// Only strategies that are actually implemented and selectable in StrategyTradingCard
 const BUILT_IN_STRATEGIES: Strategy[] = [
-  {
-    id: 'fast-test-strategy',
-    name: 'Fast Test Strategy',
-    description: 'Test strategy that places a trade within 60 seconds with entry, stop loss, and take profit. Uses risk settings from configuration with 0.3% TP/SL. Perfect for testing live trading functionality.',
-    type: 'scalping',
-    parameters: {
-      timeframe: '2s',
-      indicators: ['Price action'],
-      riskReward: 1.0,
-      maxPositions: 1,
-      takeProfitPercent: 0.3,
-      stopLossPercent: 0.3,
-      maxWaitTime: '60s',
-    },
-    isBuiltIn: true,
-    canRunLive: true,
-  },
-  {
-    id: 'ema-rsi-scalper',
-    name: 'EMA-RSI Scalper',
-    description: 'High-frequency scalping strategy using EMA crossovers and RSI momentum. Trades small price movements with tight stop losses and quick exits. Holds positions for maximum 5 minutes with 0.3% profit targets.',
-    type: 'scalping',
-    parameters: {
-      timeframe: '2s',
-      indicators: ['EMA 9', 'EMA 21', 'RSI 14'],
-      riskReward: 1.0,
-      maxPositions: 1,
-      emaFastPeriod: 9,
-      emaSlowPeriod: 21,
-      rsiPeriod: 14,
-      takeProfitPercent: 0.3,
-      stopLossPercent: 0.3,
-      maxHoldTime: '5m',
-      cooldown: '30s',
-    },
-    isBuiltIn: true,
-    canRunLive: true,
-  },
-  {
-    id: 'third-iteration',
-    name: 'Vortex',
-    description: 'Advanced momentum-based strategy using Vortex Indicator (VI+ and VI-) to identify trend strength and reversals. Combines directional movement with ATR for precise entry and exit signals. Optimized for trending markets.',
-    type: 'momentum',
-    parameters: {
-      timeframe: '2s',
-      indicators: ['Vortex Indicator', 'ATR', 'Price Action'],
-      riskReward: 1.0,
-      maxPositions: 1,
-      vortexPeriod: 14,
-      takeProfitPercent: 0.3,
-      stopLossPercent: 0.3,
-      maxHoldTime: '5m',
-    },
-    isBuiltIn: true,
-    canRunLive: true,
-  },
   {
     id: 'razor',
     name: 'Razor',
@@ -108,53 +53,18 @@ const BUILT_IN_STRATEGIES: Strategy[] = [
     canRunLive: true,
   },
   {
-    id: 'momentum-1',
-    name: 'Momentum Trend Follower',
-    description: 'Volgt sterke markt trends met behulp van RSI en EMA indicators. Opent posities wanneer de momentum sterk is en sluit ze bij trendwisselingen. Ideaal voor volatile markten met duidelijke richtingen.',
+    id: 'thor',
+    name: 'Thor',
+    description: '⚡ COMING SOON: Advanced momentum-based strategy with multi-timeframe analysis. Currently in development - will be available in the next release.',
     type: 'momentum',
     parameters: {
       timeframe: '5m',
-      indicators: ['RSI', 'EMA 20', 'EMA 50'],
-      riskReward: 2.0,
-      maxPositions: 2,
-      rsiThreshold: 70,
-      emaSpacing: 30,
-    },
-    isBuiltIn: true,
-    canRunLive: false,
-  },
-  {
-    id: 'mean-reversion-1',
-    name: 'Bollinger Band Reversion',
-    description: 'Handelt op overkocht en oververkocht condities met Bollinger Bands. Koopt bij de onderste band en verkoopt bij de bovenste band. Werkt het beste in range-bound markten zonder sterke trends.',
-    type: 'mean-reversion',
-    parameters: {
-      timeframe: '15m',
-      indicators: ['Bollinger Bands', 'RSI'],
-      riskReward: 1.5,
-      maxPositions: 3,
-      bandDeviation: 2,
-      rsiOversold: 30,
-      rsiOverbought: 70,
-    },
-    isBuiltIn: true,
-    canRunLive: false,
-  },
-  {
-    id: 'breakout-1',
-    name: 'Support/Resistance Breakout',
-    description: 'Detecteert en handelt op breakouts van belangrijke support en resistance levels. Gebruikt volume confirmatie om valse breakouts te vermijden. Geschikt voor markt consolidatie fasen.',
-    type: 'breakout',
-    parameters: {
-      timeframe: '30m',
-      indicators: ['Volume', 'Price Action', 'ATR'],
+      indicators: ['Multi-timeframe momentum', 'Volume', 'Volatility'],
       riskReward: 2.5,
       maxPositions: 1,
-      volumeMultiplier: 1.5,
-      atrMultiplier: 2.0,
     },
     isBuiltIn: true,
-    canRunLive: false,
+    canRunLive: false,  // Not yet implemented
   },
 ];
 
@@ -328,14 +238,14 @@ export function StrategiesPage() {
 
       <div>
         <h2 className="text-sm font-medium text-muted-foreground mb-3 px-1">
-          Live-ready strategies ({liveReadyStrategies.length})
+          Beschikbare strategieën ({liveReadyStrategies.length})
         </h2>
         <ScrollArea className="h-[calc(100vh-280px)]">
           <div className="grid sm:grid-cols-2 gap-3 pr-4">
             {liveReadyStrategies.length === 0 ? (
               <div className="col-span-2 py-12 text-center">
                 <p className="text-muted-foreground text-sm">
-                  No live-ready strategies available. Upload custom strategies with <span className="text-foreground font-medium">canRunLive: true</span>.
+                  Geen strategieën beschikbaar. Upload custom strategieën met <span className="text-foreground font-medium">canRunLive: true</span>.
                 </p>
               </div>
             ) : (
@@ -378,15 +288,17 @@ export function StrategiesPage() {
                       </Badge>
                     )}
                     {backendStatus.isRunning && backendStatus.strategies.some(s => {
-                      // Map strategy names to IDs
-                      const nameToId: Record<string, string> = {
-                        'Fast Test': 'fast-test-strategy',
-                        'EMA-RSI Scalper': 'ema-rsi-scalper',
-                        'Vortex': 'third-iteration',
-                        'Razor': 'razor',
-                      };
-                      const strategyIdFromBackend = nameToId[s.name] || s.name.toLowerCase().replace(/\s+/g, '-');
-                      return strategyIdFromBackend === strategy.id && s.status === 'active';
+                      // Map backend strategy names to frontend IDs
+                      const strategyNameLower = s.name.toLowerCase();
+                      const strategyIdLower = strategy.id.toLowerCase();
+                      
+                      // Direct match (e.g., "razor" matches "razor")
+                      if (strategyNameLower === strategyIdLower) {
+                        return s.status === 'active';
+                      }
+                      
+                      // No match
+                      return false;
                     }) && (
                       <Badge variant="outline" className="text-xs bg-success/20 text-success border-success/30">
                         ⚡ Running on Backend

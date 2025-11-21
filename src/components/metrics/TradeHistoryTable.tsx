@@ -369,8 +369,23 @@ export function TradeHistoryTable({ strategyName }: TradeHistoryTableProps) {
 
   if (error) {
     return (
-      <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30">
-        <p className="text-sm text-destructive">Error loading trades: {error}</p>
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="max-w-md w-full p-6 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center space-y-3">
+          <div className="flex justify-center">
+            <AlertTriangle className="w-12 h-12 text-amber-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 mb-1">
+              Backend niet beschikbaar
+            </p>
+            <p className="text-xs text-muted-foreground">
+              De backend server draait niet. Start de backend om trade geschiedenis te bekijken.
+            </p>
+          </div>
+          <div className="pt-2 text-xs text-muted-foreground/70">
+            <p>Error: {error}</p>
+          </div>
+        </div>
       </div>
     );
   }

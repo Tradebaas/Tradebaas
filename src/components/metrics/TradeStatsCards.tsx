@@ -22,6 +22,7 @@ interface TradeStatsProps {
 export function TradeStatsCards({ strategyName }: TradeStatsProps) {
   const [stats, setStats] = useState<TradeStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -39,13 +40,20 @@ export function TradeStatsCards({ strategyName }: TradeStatsProps) {
       // Use same hostname as current page to avoid CORS issues
       const backendUrl = getBackendUrl();
       const response = await fetch(`${backendUrl}/api/trades/stats?${params}`);
+      
+      if (!response.ok) {
+        throw new Error('Backend not available');
+      }
+      
       const data = await response.json();
 
       if (data.success) {
         setStats(data.stats);
+        setError(null);
       }
     } catch (err) {
       console.error('Failed to fetch trade stats:', err);
+      setError('Backend niet beschikbaar');
     } finally {
       setLoading(false);
     }
@@ -57,6 +65,19 @@ export function TradeStatsCards({ strategyName }: TradeStatsProps) {
         {[...Array(6)].map((_, i) => (
           <Skeleton key={i} className="h-20 w-full" />
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center">
+        <p className="text-sm text-amber-600 dark:text-amber-400 font-medium mb-1">
+          ⚠️ Backend niet beschikbaar
+        </p>
+        <p className="text-xs text-muted-foreground">
+          De backend server draait niet. Start de backend om trade statistieken te zien.
+        </p>
       </div>
     );
   }
