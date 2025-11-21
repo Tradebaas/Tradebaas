@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "strategyName": null,
+  "instrument": null,
+  "state": "IDLE",
+  "startedAt": null,
+  "lastTransition": 1763060232318,
+  "positionEntryPrice": null,
+  "positionSize": null,
+  "positionSide": null,
+  "metadata": {}
+}

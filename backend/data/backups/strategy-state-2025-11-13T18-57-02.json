@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "strategyName": "Strategy-2",
+  "instrument": "BTC-PERPETUAL",
+  "state": "ANALYZING",
+  "startedAt": 1763060222924,
+  "lastTransition": 1763060222924,
+  "positionEntryPrice": null,
+  "positionSize": null,
+  "positionSide": null,
+  "metadata": {}
+}

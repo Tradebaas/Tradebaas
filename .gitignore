@@ -1,0 +1,11 @@
+node_modules
+dist
+*.log
+logs/
+.env
+.env.local
+backend-state.json
+runtime.config.json
+spark.meta.json
+# Backup files (te groot voor GitHub)
+*.tar.gz

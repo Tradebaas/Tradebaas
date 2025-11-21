@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "strategyName": "Strategy5",
+  "instrument": "BTC-PERPETUAL",
+  "state": "POSITION_OPEN",
+  "startedAt": 1763060221946,
+  "lastTransition": 1763060221981,
+  "positionEntryPrice": 48251.09274480392,
+  "positionSize": 612.8117072320132,
+  "positionSide": "short",
+  "metadata": {}
+}

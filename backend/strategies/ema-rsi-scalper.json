@@ -1,0 +1,47 @@
+{
+  "id": "ema-rsi-scalper",
+  "name": "EMA-RSI Scalping Strategy",
+  "instrument": "BTC_USDC-PERPETUAL",
+  "timeframe": "5m",
+  "rules": [
+    {
+      "type": "indicator",
+      "indicator": "ema",
+      "condition": "crossover",
+      "params": {
+        "fast": 9,
+        "slow": 21
+      }
+    },
+    {
+      "type": "indicator",
+      "indicator": "rsi",
+      "condition": "oversold",
+      "value": 30
+    },
+    {
+      "type": "indicator",
+      "indicator": "rsi",
+      "condition": "overbought",
+      "value": 70
+    },
+    {
+      "type": "volume",
+      "condition": "above_average",
+      "value": 1.5
+    }
+  ],
+  "risk": {
+    "mode": "percent",
+    "value": 2,
+    "maxLeverage": 10
+  },
+  "stopLoss": {
+    "type": "percent",
+    "value": 1.5
+  },
+  "takeProfit": {
+    "type": "risk_reward",
+    "value": 2
+  }
+}

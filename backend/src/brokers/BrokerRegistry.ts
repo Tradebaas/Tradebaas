@@ -1,0 +1,261 @@
+export interface BrokerMetadata {
+  id: string;
+  name: string;
+  logo: string;
+  maxLeverage: number;
+  supportedPairs: string[];
+  docsURL: string;
+  features: {
+    spot: boolean;
+    futures: boolean;
+    perpetuals: boolean;
+    options: boolean;
+    websocket: boolean;
+  };
+  testnetAvailable: boolean;
+}
+
+export const BROKER_METADATA: Record<string, BrokerMetadata> = {
+  deribit: {
+    id: 'deribit',
+    name: 'Deribit',
+    logo: '/brokers/deribit.svg',
+    maxLeverage: 50,
+    supportedPairs: ['BTC_USDC-PERPETUAL', 'ETH_USDC-PERPETUAL', 'BTC-PERPETUAL', 'ETH-PERPETUAL'],
+    docsURL: 'https://docs.deribit.com',
+    features: {
+      spot: false,
+      futures: true,
+      perpetuals: true,
+      options: true,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  binance: {
+    id: 'binance',
+    name: 'Binance',
+    logo: '/brokers/binance.svg',
+    maxLeverage: 125,
+    supportedPairs: ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'],
+    docsURL: 'https://binance-docs.github.io/apidocs/futures/en/',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  bybit: {
+    id: 'bybit',
+    name: 'Bybit',
+    logo: '/brokers/bybit.svg',
+    maxLeverage: 100,
+    supportedPairs: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'],
+    docsURL: 'https://bybit-exchange.github.io/docs/v5/intro',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  okx: {
+    id: 'okx',
+    name: 'OKX',
+    logo: '/brokers/okx.svg',
+    maxLeverage: 125,
+    supportedPairs: ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'SOL-USDT-SWAP'],
+    docsURL: 'https://www.okx.com/docs-v5/en/',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: true,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  kraken: {
+    id: 'kraken',
+    name: 'Kraken',
+    logo: '/brokers/kraken.svg',
+    maxLeverage: 5,
+    supportedPairs: ['PF_XBTUSD', 'PF_ETHUSD', 'PF_SOLUSD'],
+    docsURL: 'https://docs.kraken.com/rest/',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: false,
+  },
+  bitget: {
+    id: 'bitget',
+    name: 'Bitget',
+    logo: '/brokers/bitget.svg',
+    maxLeverage: 125,
+    supportedPairs: ['BTCUSDT_UMCBL', 'ETHUSDT_UMCBL', 'SOLUSDT_UMCBL'],
+    docsURL: 'https://www.bitget.com/api-doc/contract/intro',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: false,
+  },
+  kucoin: {
+    id: 'kucoin',
+    name: 'KuCoin',
+    logo: '/brokers/kucoin.svg',
+    maxLeverage: 100,
+    supportedPairs: ['XBTUSDTM', 'ETHUSDTM', 'SOLUSDTM'],
+    docsURL: 'https://docs.kucoin.com/futures/',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  mexc: {
+    id: 'mexc',
+    name: 'MEXC',
+    logo: '/brokers/mexc.svg',
+    maxLeverage: 200,
+    supportedPairs: ['BTC_USDT', 'ETH_USDT', 'SOL_USDT'],
+    docsURL: 'https://mexcdevelop.github.io/apidocs/contract_v1_en/',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: false,
+  },
+  gateio: {
+    id: 'gateio',
+    name: 'Gate.io',
+    logo: '/brokers/gateio.svg',
+    maxLeverage: 100,
+    supportedPairs: ['BTC_USDT', 'ETH_USDT', 'SOL_USDT'],
+    docsURL: 'https://www.gate.io/docs/developers/apiv4/en/',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  bitmex: {
+    id: 'bitmex',
+    name: 'BitMEX',
+    logo: '/brokers/bitmex.svg',
+    maxLeverage: 100,
+    supportedPairs: ['XBTUSD', 'ETHUSD', 'SOLUSD'],
+    docsURL: 'https://www.bitmex.com/api/explorer/',
+    features: {
+      spot: false,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  huobi: {
+    id: 'huobi',
+    name: 'Huobi',
+    logo: '/brokers/huobi.svg',
+    maxLeverage: 125,
+    supportedPairs: ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'],
+    docsURL: 'https://huobiapi.github.io/docs/usdt_swap/v1/en/',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: false,
+  },
+  phemex: {
+    id: 'phemex',
+    name: 'Phemex',
+    logo: '/brokers/phemex.svg',
+    maxLeverage: 100,
+    supportedPairs: ['BTCUSD', 'ETHUSD', 'SOLUSD'],
+    docsURL: 'https://github.com/phemex/phemex-api-docs',
+    features: {
+      spot: true,
+      futures: true,
+      perpetuals: true,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: true,
+  },
+  coinbase: {
+    id: 'coinbase',
+    name: 'Coinbase Advanced',
+    logo: '/brokers/coinbase.svg',
+    maxLeverage: 5,
+    supportedPairs: ['BTC-USD', 'ETH-USD', 'SOL-USD'],
+    docsURL: 'https://docs.cloud.coinbase.com/advanced-trade-api/docs/welcome',
+    features: {
+      spot: true,
+      futures: false,
+      perpetuals: false,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: false,
+  },
+  bitstamp: {
+    id: 'bitstamp',
+    name: 'Bitstamp',
+    logo: '/brokers/bitstamp.svg',
+    maxLeverage: 3,
+    supportedPairs: ['btcusd', 'ethusd', 'solusd'],
+    docsURL: 'https://www.bitstamp.net/api/',
+    features: {
+      spot: true,
+      futures: false,
+      perpetuals: false,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: false,
+  },
+  bitfinex: {
+    id: 'bitfinex',
+    name: 'Bitfinex',
+    logo: '/brokers/bitfinex.svg',
+    maxLeverage: 10,
+    supportedPairs: ['tBTCUSD', 'tETHUSD', 'tSOLUSD'],
+    docsURL: 'https://docs.bitfinex.com/docs',
+    features: {
+      spot: true,
+      futures: false,
+      perpetuals: false,
+      options: false,
+      websocket: true,
+    },
+    testnetAvailable: false,
+  },
+};
+
+export const BROKER_WHITELIST = Object.keys(BROKER_METADATA);

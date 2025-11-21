@@ -1,0 +1,226 @@
+# ⚠️ LEGACY FILE - DO NOT USE
+
+> **This is an outdated README from an earlier iteration.**
+> 
+> **Current documentation:**
+> - Main README: `/README.md`
+> - Master reference: `/MASTER.md`
+> - Full docs: `/DOCS/`
+>
+> This file is kept for historical reference only.
+
+---
+
+# Tradebaas - Deribit Trading App MVP
+
+**Iteration 0: Secure API Connection Foundation**
+
+A professional, secure Deribit trading application with glassmorphism design for managing crypto derivatives trades.
+
+## 🏗️ Architecture
+
+```
+/src
+├── /components        # React components
+│   ├── /ui           # shadcn UI components (pre-installed)
+│   ├── KPICard.tsx   # KPI display component
+│   ├── StatusPill.tsx # Connection state indicator
+│   └── TradingCard.tsx # Main trading connection interface
+├── /hooks            # Custom React hooks
+│   └── use-mobile.ts
+├── /lib              # Core libraries
+│   ├── deribitClient.ts # WebSocket client with retry logic
+│   ├── encryption.ts    # AES-GCM encryption for credentials
+│   └── utils.ts
+├── /state            # Zustand state management
+│   └── store.ts      # Global trading state
+├── /styles           # Theme configuration
+│   └── theme.css
+├── /tests            # Vitest test suite
+│   ├── deribitClient.test.ts
+│   └── encryption.test.ts
+├── App.tsx           # Main application
+├── index.css         # Global styles & theme
+└── main.tsx          # Entry point
+```
+
+## 🚀 Features (Iteration 0)
+
+### ✅ Secure API Connection
+- WebSocket connection to Deribit API (live & testnet)
+- OAuth2 client credentials flow via `public/auth`
+- Encrypted credential storage using AES-GCM
+- Automatic token refresh before expiry
+
+### ✅ Connection State Machine
+States: `Stopped` → `Connecting` → `Analyzing` → `Active` → `Error`
+- Clear state transitions with visual feedback
+- Prevents invalid operations based on state
+
+### ✅ Robust Error Handling
+- Exponential backoff with jitter for retries (max 3 attempts)
+- Automatic reconnection on unexpected disconnects
+- Clear error messages mapped from Deribit responses
+- Request timeout handling (30s default)
+
+### ✅ Kill Switch
+- Immediate emergency stop (halts all operations)
+- Cancels pending requests
+- Closes WebSocket connection
+- Resets to `Stopped` state
+
+### ✅ Environment Toggle
+- Switch between Live and Testnet
+- Default: Live trading environment
+- Visual indicator for testnet mode
+- Automatic reconnection on environment change
+
+### ✅ Security Features
+- API credentials encrypted with AES-GCM 256-bit
+- Secrets never stored in plain text
+- Masked password input with toggle visibility
+- Unique request IDs for idempotency
+
+## 🎨 Design System
+
+**Theme**: Professional glassmorphism with trading terminal aesthetic
+- **Primary**: Deep Slate `oklch(0.25 0.01 240)`
+- **Accent**: Electric Blue `oklch(0.60 0.15 240)`
+- **Success**: Emerald `oklch(0.65 0.18 155)`
+- **Destructive**: Vibrant Red `oklch(0.55 0.22 25)`
+
+**Typography**:
+- Headings: Inter (Bold/SemiBold)
+- Body: Inter (Regular/Medium)
+- Data/Code: JetBrains Mono
+
+## 🧪 Testing
+
+Run tests with Vitest:
+```bash
+npm test
+```
+
+Test coverage includes:
+- ✅ Encryption/decryption workflows
+- ✅ State machine transitions
+- ✅ Exponential backoff calculations
+- ✅ WebSocket connection lifecycle
+- ✅ Credential storage/retrieval
+
+## 📋 Acceptance Criteria
+
+- [x] **AC1**: "Connect" button successfully retrieves token via `public/auth`
+- [x] **AC2**: Tokens are stored encrypted in localStorage
+- [x] **AC3**: Connection errors display clear messages and set state to `Error`
+- [x] **AC4**: Testnet toggle correctly switches WebSocket endpoint
+- [x] **AC5**: Default environment is Live (not Testnet)
+- [x] **AC6**: Kill Switch immediately stops all operations
+- [x] **AC7**: Status updates to "Analyzing" on successful connection
+
+## 🔐 Getting Deribit API Credentials
+
+### For Testnet (Recommended for Testing):
+1. Visit: https://test.deribit.com
+2. Create account (free, no KYC needed)
+3. Go to: Account → API → Create API Key
+4. Set permissions: Read + Trade
+5. Copy API Key and API Secret
+
+### For Live Trading:
+1. Visit: https://www.deribit.com
+2. Complete account setup and verification
+3. Go to: Account → API → Create API Key
+4. Set permissions as needed
+5. ⚠️ **Use with caution - real funds at risk**
+
+## 🛠️ Manual Test Procedure
+
+1. **Start the app**
+   ```bash
+   npm run dev
+   ```
+
+2. **Enable Testnet mode** (recommended)
+   - Toggle "Use Testnet" switch to ON
+   - Verify label shows "Testnet Environment"
+
+3. **Enter credentials**
+   - Paste your Deribit API Key
+   - Paste your Deribit API Secret (will be masked)
+   - Click eye icon to verify secret if needed
+
+4. **Connect**
+   - Click "Connect" button
+   - Status should change: Stopped → Connecting → Analyzing
+   - Success: Green "Analyzing" badge appears
+   - Failure: Red error alert displays with reason
+
+5. **Test Kill Switch**
+   - Click red "Kill Switch" button in header
+   - Status should immediately change to "Stopped"
+   - Toast notification confirms shutdown
+
+6. **Test Reconnection**
+   - Credentials should be remembered
+   - Click "Connect" again
+   - Should reconnect without re-entering credentials
+
+7. **Test Environment Switch**
+   - Toggle "Use Testnet" to OFF (Live mode)
+   - If connected, app should disconnect automatically
+   - Reconnect to verify Live endpoint is used
+
+## 🔒 Security Best Practices
+
+- ✅ Never commit API keys to version control
+- ✅ Use testnet for development/testing
+- ✅ Credentials encrypted at rest
+- ✅ Secrets masked in UI by default
+- ✅ Token expiry handling with auto-refresh
+- ✅ Request timeouts prevent hanging
+- ✅ Kill switch for emergency stops
+
+## 🏁 Next Iterations (Planned)
+
+**Iteration 1**: Portfolio & Position Management
+- Real-time balance display
+- Position tracking
+- P&L calculations
+
+**Iteration 2**: Trade Execution
+- Market/Limit orders
+- OCO (One-Cancels-Other) logic
+- Risk sizing calculations
+
+**Iteration 3**: Advanced Features
+- Trade history
+- Performance analytics
+- Automated strategies
+
+## 📚 Technical References
+
+- **Deribit API Docs**: https://docs.deribit.com
+- **WebSocket API**: https://docs.deribit.com/v2/#json-rpc
+- **Authentication**: https://docs.deribit.com/v2/#authentication
+- **Public/Auth**: https://docs.deribit.com/v2/#public-auth
+
+## 🐛 Known Limitations (Iteration 0)
+
+- KPI cards show placeholder values (will be implemented in Iteration 1)
+- No actual trading functionality yet (Iteration 2)
+- No persistent session across page refreshes (tokens expire)
+- WebSocket subscriptions not yet implemented
+
+## 💡 Development Notes
+
+**State Management**: Zustand for global state (lightweight, no boilerplate)
+**Encryption**: Web Crypto API (AES-GCM 256-bit, browser-native)
+**Icons**: Phosphor Icons (consistent, professional set)
+**UI Components**: shadcn/ui v4 (accessible, customizable)
+**Styling**: Tailwind CSS v4 + glassmorphism effects
+**WebSocket**: Native WebSocket API (no external dependencies)
+
+---
+
+Built with ❤️ by the Tradebaas team

@@ -1,0 +1,7 @@
+This file has been removed.
+
+The thirdIterationStrategy has been renamed to vortexStrategy.
+
+Please use: /workspaces/spark-template/src/lib/strategies/vortexStrategy.ts
+
+All imports should reference vortexStrategy instead.

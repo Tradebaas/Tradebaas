@@ -1,0 +1,9 @@
+<svg width="40" height="40" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Eerste X - bovenaan -->
+  <path d="M50 50 L150 150 L250 50 L300 50 L175 175 L300 300 L250 300 L150 200 L50 300 L0 300 L125 175 L0 50 L50 50 Z" 
+        fill="#F1C40F"/>
+  
+  <!-- Tweede vorm - V/pijl omlaag -->  
+  <path d="M100 320 L150 370 L200 320 L240 320 L150 410 L60 320 L100 320 Z" 
+        fill="#F39C12"/>
+</svg>
