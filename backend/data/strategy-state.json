@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "strategyName": "ema-rsi-scalper",
+  "strategyName": "Razor",
   "instrument": "BTC-PERPETUAL",
   "state": "ANALYZING",
-  "startedAt": 1763064051962,
-  "lastTransition": 1763064051962,
+  "startedAt": 1763737111899,
+  "lastTransition": 1763737111899,
   "positionEntryPrice": null,
   "positionSize": null,
   "positionSide": null,

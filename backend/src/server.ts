@@ -27,6 +27,8 @@ import { log } from './logger';
 import { telegramService } from './notifications/telegram';
 
 import { kvStorage } from './kv-storage';
+import { registerUser, loginUser } from './services/auth-service';
+import { authenticateRequest } from './middleware/auth';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Changed from 127.0.0.1 to allow external access
@@ -85,6 +87,89 @@ server.addHook('onRequest', (request, reply, done) => {
 
 // Initialize WebSocket server (Iteration 7)
 const wsServer = new AnalysisWebSocketServer();
+
+// ============================================================================
+// AUTHENTICATION ENDPOINTS (FASE 1 - MULTI USER SAAS)
+// ============================================================================
+
+server.post('/auth/register', async (request, reply) => {
+  try {
+    const body = request.body as { email?: string; password?: string; fullName?: string };
+
+    if (!body?.email || !body?.password) {
+      return reply.code(400).send({ success: false, error: 'Email and password are required' });
+    }
+
+    // Basic, conservative validation for now
+    const email = body.email.trim().toLowerCase();
+    const password = body.password;
+
+    if (!email.includes('@') || password.length < 12) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Invalid email or password too short (min 12 characters)',
+      });
+    }
+
+    const user = await registerUser({
+      email,
+      password,
+      fullName: body.fullName,
+    });
+
+    return reply.code(201).send({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.full_name,
+        createdAt: user.created_at,
+      },
+    });
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Register failed');
+    const message =
+      error?.message && error.message.includes('duplicate key value')
+        ? 'Email already in use'
+        : 'Registration failed';
+    return reply.code(400).send({ success: false, error: message });
+  }
+});
+
+server.post('/auth/login', async (request, reply) => {
+  try {
+    const body = request.body as { email?: string; password?: string };
+
+    if (!body?.email || !body?.password) {
+      return reply.code(400).send({ success: false, error: 'Email and password are required' });
+    }
+
+    const { user, tokens } = await loginUser({
+      email: body.email,
+      password: body.password,
+    });
+
+    return reply.send({
+      success: true,
+      accessToken: tokens.accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.full_name,
+      },
+    });
+  } catch (error: any) {
+    request.log.info({ err: error }, 'Login failed');
+    return reply.code(401).send({ success: false, error: 'Invalid credentials' });
+  }
+});
+
+server.get('/auth/me', { preHandler: authenticateRequest }, async (request) => {
+  return {
+    success: true,
+    user: request.user,
+  };
+});
 
 // Health check endpoint - returns 200/503 based on actual health
 server.get('/health', async (request, reply) => {
