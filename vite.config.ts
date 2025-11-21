@@ -20,11 +20,11 @@ export default defineConfig({
     host: '0.0.0.0', // Listen on all network interfaces
     port: 5173, // Vite default port for dev server
     strictPort: false, // Allow fallback if needed
-    allowedHosts: ['YOUR_DOMAIN', 'localhost', '127.0.0.1', 'YOUR_SERVER_IP'],
+    allowedHosts: ['localhost', '127.0.0.1'], // Add your production domain here
     hmr: {
       clientPort: 443, // HMR via HTTPS reverse proxy
       protocol: 'wss', // WebSocket Secure for HMR
-      host: 'YOUR_DOMAIN', // Use domain for HMR connection
+      host: 'localhost', // Change to your production domain
     },
     watch: {
       // Ignore backend files that change frequently

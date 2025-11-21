@@ -4,6 +4,24 @@
 
 A professional, automated trading platform for Deribit crypto derivatives with 24/7 backend execution, real-time technical analysis, and glassmorphism design.
 
+## ⚠️ SECURITY & PRIVACY
+
+**IMPORTANT:** This repository does NOT contain any sensitive information:
+- ❌ No API keys or secrets
+- ❌ No server IP addresses or domains
+- ❌ No production credentials
+- ❌ No trading databases
+
+**Before deploying:**
+1. Read [`INSTALLATION.md`](INSTALLATION.md) for complete setup instructions
+2. Configure `.env` files with YOUR credentials (never commit these!)
+3. Update `vite.config.ts` with YOUR domain
+4. Create `ecosystem.config.cjs` with YOUR server paths
+
+See `.gitignore` for a complete list of excluded files.
+
+---
+
 ## 🏗️ Architecture
 
 ### System Overview

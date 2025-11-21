@@ -1,11 +1,58 @@
+# Dependencies
 node_modules
 dist
-*.log
-logs/
+build
+
+# Environment & Secrets - NEVER COMMIT THESE!
 .env
 .env.local
+.env.production
+.env.*.local
+backend/.env
+backend/.env.production
+backend/.env.local
+
+# Runtime State & Data
 backend-state.json
 runtime.config.json
 spark.meta.json
-# Backup files (te groot voor GitHub)
+state/trades.db*
+backend/data/trades.db*
+backend/data/strategy-state.json
+backend/data/backups/*
+
+# Logs
+*.log
+logs/
+backend/logs/
+*.log.*
+
+# PM2
+.pm2
+ecosystem.config.cjs
+config/ecosystem.config.*
+
+# Backup files
 *.tar.gz
+*.backup
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp
+*.swo
+*~
+
+# Testing
+coverage
+.nyc_output
+
+# Temporary
+tmp/
+temp/
