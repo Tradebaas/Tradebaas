@@ -16,6 +16,15 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 > - Sectie 6: **DEVELOPMENT PRINCIPLES** - Lees dit voordat je IETS wijzigt!
 > - Sectie 7: **HOW TO USE MASTER.MD** - Workflow voor alle changes
 >
+> **🚀 FUTURE ROADMAP:**
+> - **Multi-User SaaS Platform:** Zie `DOCS/architecture/MULTI_USER_SAAS_PLAN.md`
+>   - Complete implementatieplan voor multi-tenant architectuur
+>   - User authentication & authorization (JWT)
+>   - Per-user credential storage (encrypted PostgreSQL)
+>   - Per-user broker isolation & strategy management
+>   - Manual disconnect requirement gehandhaafd
+>   - Geschatte tijd: 3-4 weken fulltime (6-8 weken part-time)
+>
 >**📅 RECENT UPDATES (16 nov 2025):**
 > - ✅ Fresh GitHub clone: Complete repo sync vanaf https://github.com/Tradebaas/Tradebaas.git
 > - ✅ Server Migration: Draait nu op dedicated VPS YOUR_SERVER_IP (Ubuntu)
@@ -108,6 +117,17 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 ---
 
 ## 1. High-level Architectuur
+
+> **⚠️ HUIDIGE STATUS:** Single-User Platform
+> 
+> Dit is de **huidige architectuur** voor één gebruiker. Voor toekomstige multi-user SaaS platform,
+> zie **`DOCS/architecture/MULTI_USER_SAAS_PLAN.md`** - complete implementatieplan met:
+> - PostgreSQL multi-user database design
+> - User authentication & JWT tokens
+> - Per-user credential encryption & isolation
+> - Per-user broker connections & strategy management
+> - Manual disconnect requirement enforcement
+> - 4-week gefaseerde implementatie roadmap
 
 ### 1.1 Hoofdonderdelen
 
