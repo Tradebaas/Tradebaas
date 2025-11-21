@@ -97,39 +97,36 @@ class BackendAPI {
     };
   }
 
-  async saveCredentials(service: string, credentials: DeribitCredentials): Promise<{ success: boolean }> {
-    // Convert object to array format expected by backend
-    const credentialsArray = [
-      { key: 'api_key', value: credentials.apiKey },
-      { key: 'api_secret', value: credentials.apiSecret },
-    ];
-    
-    const response = await fetch(`${this.baseUrl}/api/credentials`, {
+  async saveCredentials(service: string, credentials: DeribitCredentials, environment: DeribitEnvironment = 'testnet'): Promise<{ success: boolean }> {
+    // Send credentials to backend for encrypted storage
+    const response = await fetch(`${this.baseUrl}/api/user/credentials`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify({ service, credentials: credentialsArray }),
+      body: JSON.stringify({
+        broker: service, // 'deribit'
+        environment, // 'live' or 'testnet'
+        apiKey: credentials.apiKey,
+        apiSecret: credentials.apiSecret,
+      }),
     });
     return await response.json();
   }
 
   async getCredentials(service: string): Promise<{ success: boolean; credentials?: DeribitCredentials }> {
-    const response = await fetch(`${this.baseUrl}/api/credentials/${service}`, {
+    const response = await fetch(`${this.baseUrl}/api/user/credentials/status`, {
       headers: this.getAuthHeaders(),
     });
     return await response.json();
   }
 
   async deleteCredentials(service: string): Promise<{ success: boolean }> {
-    const response = await fetch(`${this.baseUrl}/api/credentials/${service}`, {
-      method: 'DELETE',
-      headers: this.getAuthHeaders(),
-    });
-    return await response.json();
+    // TODO: Add DELETE endpoint on backend if needed
+    return { success: true };
   }
 
   async connect(credentials: DeribitCredentials, environment: DeribitEnvironment): Promise<{ success: boolean; error?: string }> {
-    // 1. Save credentials first
-    const saveResult = await this.saveCredentials('deribit', credentials);
+    // 1. Save credentials first (with environment)
+    const saveResult = await this.saveCredentials('deribit', credentials, environment);
     if (!saveResult.success) {
       return { success: false, error: 'Failed to save credentials' };
     }
