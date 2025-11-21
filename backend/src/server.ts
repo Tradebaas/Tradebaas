@@ -29,6 +29,7 @@ import { telegramService } from './notifications/telegram';
 import { kvStorage } from './kv-storage';
 import { registerUser, loginUser } from './services/auth-service';
 import { authenticateRequest } from './middleware/auth';
+import { userCredentialsService } from './services/user-credentials-service';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Changed from 127.0.0.1 to allow external access
@@ -169,6 +170,156 @@ server.get('/auth/me', { preHandler: authenticateRequest }, async (request) => {
     success: true,
     user: request.user,
   };
+});
+
+// ============================================================================
+// USER CREDENTIALS ENDPOINTS (FASE 2 - MULTI USER SAAS)
+// ============================================================================
+
+// Save or update user credentials (encrypted server-side)
+server.post('/api/user/credentials', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const body = request.body as {
+      broker?: string;
+      environment?: 'live' | 'testnet';
+      apiKey?: string;
+      apiSecret?: string;
+    };
+
+    if (!body?.broker || !body?.environment || !body?.apiKey || !body?.apiSecret) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Missing required fields: broker, environment, apiKey, apiSecret',
+      });
+    }
+
+    const userId = request.user!.userId;
+
+    await userCredentialsService.saveCredentials({
+      userId,
+      broker: body.broker,
+      environment: body.environment,
+      apiKey: body.apiKey,
+      apiSecret: body.apiSecret,
+    });
+
+    request.log.info({ userId, broker: body.broker, environment: body.environment }, 'User credentials saved');
+
+    return reply.send({
+      success: true,
+      message: 'Credentials saved successfully',
+    });
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to save credentials');
+    return reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to save credentials',
+    });
+  }
+});
+
+// Check if user has credentials (returns metadata only, NO secrets)
+server.get('/api/user/credentials/status', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const { broker, environment } = request.query as { broker?: string; environment?: string };
+
+    if (!broker || !environment) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Missing query parameters: broker, environment',
+      });
+    }
+
+    const userId = request.user!.userId;
+
+    const hasCredentials = await userCredentialsService.hasCredentials(
+      userId,
+      broker,
+      environment
+    );
+
+    return reply.send({
+      success: true,
+      hasCredentials,
+      broker,
+      environment,
+    });
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to check credentials');
+    return reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to check credentials',
+    });
+  }
+});
+
+// List all credentials metadata for user (NO secrets)
+server.get('/api/user/credentials', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const userId = request.user!.userId;
+
+    const credentials = await userCredentialsService.listCredentials(userId);
+
+    return reply.send({
+      success: true,
+      credentials: credentials.map(c => ({
+        id: c.id,
+        broker: c.broker,
+        environment: c.environment,
+        createdAt: c.created_at,
+        lastUsed: c.last_used,
+        isActive: c.is_active,
+      })),
+    });
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to list credentials');
+    return reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to list credentials',
+    });
+  }
+});
+
+// Delete credentials
+server.delete('/api/user/credentials', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const { broker, environment } = request.query as { broker?: string; environment?: string };
+
+    if (!broker || !environment) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Missing query parameters: broker, environment',
+      });
+    }
+
+    const userId = request.user!.userId;
+
+    const deleted = await userCredentialsService.deleteCredentials(
+      userId,
+      broker,
+      environment
+    );
+
+    if (!deleted) {
+      return reply.code(404).send({
+        success: false,
+        error: 'Credentials not found',
+      });
+    }
+
+    request.log.info({ userId, broker, environment }, 'User credentials deleted');
+
+    return reply.send({
+      success: true,
+      message: 'Credentials deleted successfully',
+    });
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to delete credentials');
+    return reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to delete credentials',
+    });
+  }
 });
 
 // Health check endpoint - returns 200/503 based on actual health
