@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import { useKV } from '@/hooks/use-kv-polyfill';
 import { useBackendStrategyStatus } from '@/hooks/use-backend-strategy-status';
 import { useTradingStore } from '@/state/store';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Upload, File, Trash, CheckCircle, Info, Eye } from '@phosphor-icons/react';
-import { toast } from 'sonner';
+import { File, CheckCircle, Info, Eye, Zap, Wind, ArrowUpRight } from 'lucide-react';
 import { StrategyDetailsDialog } from '@/components/dialogs/StrategyDetailsDialog';
 import { ExampleFormatDialog } from '@/components/dialogs/ExampleFormatDialog';
 
@@ -33,21 +30,33 @@ const BUILT_IN_STRATEGIES: Strategy[] = [
   {
     id: 'razor',
     name: 'Razor',
-    description: '🔥 HIGH-FREQUENCY SCALPING: 50-150 trades/dag, 80%+ winrate. Mean-reversion met EMA(9/21) + RSI(40/60) + Volatility + Momentum. Tight SL 0.5%, aggressive TP 1.0% (2:1 R:R). Optimized voor micro-moves met 5min cooldown. Automated 24/7 backend execution.',
+    description: 'Snelle mean-reversion scalping met multi-timeframe trend filtering. Trade alleen mee met de trend op 1m/5m/15m timeframes. Gebruikt EMA crossovers, RSI extremes en momentum confluences voor high-probability entries.',
     type: 'scalping',
     parameters: {
       timeframe: '1m',
-      indicators: ['EMA 9/21', 'RSI 14', 'Volatility', 'Momentum'],
+      indicators: ['EMA 9/21 (1m/5m/15m)', 'RSI 14', 'Momentum', 'Volatility'],
       riskReward: 2.0,
+      winRate: '70%+',
       maxPositions: 1,
       takeProfitPercent: 1.0,
       stopLossPercent: 0.5,
       maxDailyTrades: 150,
       cooldownMinutes: 5,
-      rsiOversold: 40,
-      rsiOverbought: 60,
-      minVolatility: 0.01,
-      maxVolatility: 5.0,
+      features: [
+        'Multi-timeframe trend filter (1m/5m/15m alignment)',
+        'Confluence-based entry systeem (min 4/5 signals)',
+        'Break-even auto-adjustment (50% naar TP)',
+        'Trailing stop (activatie bij 60% naar TP, 0.3% distance)',
+        'Automatische orphan order cleanup',
+        'Database-first trade tracking',
+      ],
+      entryRules: [
+        'Trend alignment op 1m/5m/15m required',
+        'RSI extreme (oversold <35 of overbought >65)',
+        'Momentum confirmatie in trend richting',
+        'Volatility binnen range (0.02% - 1.5%)',
+        'Confluence score minimaal 4/5',
+      ],
     },
     isBuiltIn: true,
     canRunLive: true,
@@ -55,13 +64,19 @@ const BUILT_IN_STRATEGIES: Strategy[] = [
   {
     id: 'thor',
     name: 'Thor',
-    description: '⚡ COMING SOON: Advanced momentum-based strategy with multi-timeframe analysis. Currently in development - will be available in the next release.',
+    description: 'Advanced momentum-based strategy met multi-timeframe analysis. Designed voor trending markets met breakout detection en volume confirmatie. Komt binnenkort beschikbaar.',
     type: 'momentum',
     parameters: {
       timeframe: '5m',
-      indicators: ['Multi-timeframe momentum', 'Volume', 'Volatility'],
+      indicators: ['Multi-timeframe momentum', 'Volume profile', 'Volatility bands'],
       riskReward: 2.5,
       maxPositions: 1,
+      features: [
+        'Breakout detection met volume confirmatie',
+        'Multi-timeframe momentum alignment',
+        'Adaptive position sizing (ATR-based)',
+        'Dynamic trailing stops',
+      ],
     },
     isBuiltIn: true,
     canRunLive: false,  // Not yet implemented
@@ -69,9 +84,7 @@ const BUILT_IN_STRATEGIES: Strategy[] = [
 ];
 
 export function StrategiesPage() {
-  const [customStrategies, setCustomStrategies] = useKV<Strategy[]>('custom-strategies', []);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [exampleDialogOpen, setExampleDialogOpen] = useState(false);
 
@@ -79,96 +92,7 @@ export function StrategiesPage() {
   const connectionState = useTradingStore((state) => state.connectionState);
   const backendStatus = useBackendStrategyStatus(connectionState === 'Active');
 
-  const allStrategies = [...BUILT_IN_STRATEGIES, ...(customStrategies || [])];
-  const liveReadyStrategies = allStrategies.filter(s => s.canRunLive);
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-
-    try {
-      const text = await file.text();
-      let parsed: any;
-
-      if (file.name.endsWith('.json')) {
-        parsed = JSON.parse(text);
-      } else if (file.name.endsWith('.yaml') || file.name.endsWith('.yml')) {
-        const lines = text.split('\n');
-        parsed = {};
-        let currentKey = '';
-        let inParameters = false;
-        
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) continue;
-          
-          if (trimmed.startsWith('parameters:')) {
-            inParameters = true;
-            parsed.parameters = {};
-            continue;
-          }
-          
-          const [key, ...valueParts] = trimmed.split(':');
-          const value = valueParts.join(':').trim();
-          
-          if (inParameters) {
-            if (trimmed.startsWith('  ') || trimmed.startsWith('-')) {
-              const paramKey = key.replace(/^-?\s*/, '').trim();
-              if (trimmed.startsWith('-')) {
-                if (!Array.isArray(parsed.parameters[currentKey])) {
-                  parsed.parameters[currentKey] = [];
-                }
-                parsed.parameters[currentKey].push(paramKey);
-              } else {
-                currentKey = paramKey;
-                parsed.parameters[paramKey] = isNaN(Number(value)) ? value : Number(value);
-              }
-            }
-          } else {
-            parsed[key.trim()] = isNaN(Number(value)) ? value : Number(value);
-          }
-        }
-      } else {
-        throw new Error('Alleen .json en .yaml bestanden worden ondersteund');
-      }
-
-      if (!parsed.name || !parsed.description || !parsed.type) {
-        throw new Error('Strategie bestand mist verplichte velden (name, description, type)');
-      }
-
-      const newStrategy: Strategy = {
-        id: `custom-${Date.now()}`,
-        name: parsed.name,
-        description: parsed.description,
-        type: parsed.type || 'custom',
-        parameters: parsed.parameters || {},
-        isBuiltIn: false,
-        canRunLive: parsed.canRunLive ?? false,
-      };
-
-      setCustomStrategies((current) => [...(current || []), newStrategy]);
-      toast.success(`Strategie "${newStrategy.name}" succesvol toegevoegd`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Ongeldig bestand formaat';
-      toast.error(`Kon strategie niet laden: ${message}`);
-    } finally {
-      setIsUploading(false);
-      event.target.value = '';
-    }
-  };
-
-  const handleDeleteStrategy = (strategyId: string) => {
-    setCustomStrategies((current) =>
-      (current || []).filter((s) => s.id !== strategyId)
-    );
-    if (selectedStrategy?.id === strategyId) {
-      setSelectedStrategy(null);
-      setDetailsDialogOpen(false);
-    }
-    toast.success('Strategie verwijderd');
-  };
+  const liveReadyStrategies = BUILT_IN_STRATEGIES.filter(s => s.canRunLive);
 
   const handleStrategyClick = (strategy: Strategy) => {
     setSelectedStrategy(strategy);
@@ -207,32 +131,12 @@ export function StrategiesPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-      <div className="flex items-start justify-between mb-6 gap-4">
+      <div className="flex items-center justify-between mb-6 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1">Strategieën</h1>
           <p className="text-sm text-muted-foreground">
-            Beheer en upload trading strategieën voor je bot
+            Beschikbare ingebouwde strategieën
           </p>
-        </div>
-        
-        <div className="flex-shrink-0">
-          <Input
-            id="strategy-upload"
-            type="file"
-            accept=".json,.yaml,.yml"
-            onChange={handleFileUpload}
-            disabled={isUploading}
-            className="hidden"
-          />
-          <Button
-            onClick={() => document.getElementById('strategy-upload')?.click()}
-            disabled={isUploading}
-            size="sm"
-            className="gap-2"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Upload</span>
-          </Button>
         </div>
       </div>
 
@@ -249,64 +153,104 @@ export function StrategiesPage() {
                 </p>
               </div>
             ) : (
-              liveReadyStrategies.map((strategy) => (
-                <Card
-                  key={strategy.id}
-                  className="p-4 cursor-pointer transition-all duration-200 hover:border-accent/50 border-border/30 hover:bg-accent/5"
-                  onClick={() => handleStrategyClick(strategy)}
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <File className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-                      <h3 className="font-semibold text-sm truncate">{strategy.name}</h3>
+              liveReadyStrategies.map((strategy) => {
+                const StrategyIcon = strategy.id === 'razor' 
+                  ? Wind 
+                  : strategy.id === 'thor' 
+                  ? Zap 
+                  : File;
+                
+                return (
+                  <Card
+                    key={strategy.id}
+                    className="p-5 cursor-pointer transition-all duration-200 hover:border-accent/50 border-border/30 hover:bg-accent/5 hover:shadow-md"
+                    onClick={() => handleStrategyClick(strategy)}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className={`p-2 rounded-lg flex-shrink-0 ${
+                          strategy.id === 'razor'
+                            ? 'bg-destructive/10 text-destructive'
+                            : strategy.id === 'thor'
+                            ? 'bg-accent/10 text-accent'
+                            : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <StrategyIcon className="w-5 h-5" />
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <h3 className="font-bold text-base truncate">{strategy.name}</h3>
+                          {strategy.isBuiltIn && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] h-4 px-1.5 bg-primary/10 text-primary border-primary/30"
+                            >
+                              <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
+                              Built-in
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] h-5 px-2 ${getTypeColor(strategy.type)}`}
+                        >
+                          {getTypeLabel(strategy.type)}
+                        </Badge>
+                      </div>
                     </div>
-                    {!strategy.isBuiltIn && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteStrategy(strategy.id);
-                        }}
-                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-                      >
-                        <Trash className="w-3.5 h-3.5" />
-                      </Button>
+
+                    {/* Description */}
+                    <p className="text-xs text-muted-foreground mb-3 line-clamp-2 leading-relaxed">
+                      {strategy.description}
+                    </p>
+
+                    {/* Key Stats */}
+                    <div className="grid grid-cols-3 gap-2 mb-3 pb-3 border-b border-border/30">
+                      <div className="text-center">
+                        <div className="text-[10px] text-muted-foreground mb-0.5">Timeframe</div>
+                        <div className="text-xs font-semibold">{strategy.parameters.timeframe || 'N/A'}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[10px] text-muted-foreground mb-0.5">Risk/Reward</div>
+                        <div className="text-xs font-semibold">{strategy.parameters.riskReward}:1</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-[10px] text-muted-foreground mb-0.5">Win Rate</div>
+                        <div className="text-xs font-semibold text-success">{strategy.parameters.winRate || 'TBD'}</div>
+                      </div>
+                    </div>
+
+                    {/* Tech Highlights */}
+                    {strategy.parameters.features && Array.isArray(strategy.parameters.features) && (
+                      <div className="space-y-1.5 mb-3">
+                        <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Key Features</div>
+                        <div className="space-y-1">
+                          {strategy.parameters.features.slice(0, 3).map((feature, idx) => (
+                            <div key={idx} className="flex items-start gap-1.5 text-[11px]">
+                              <ArrowUpRight className="w-3 h-3 flex-shrink-0 text-success mt-0.5" />
+                              <span className="text-muted-foreground leading-tight">{feature}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                    {strategy.description}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={`text-xs ${getTypeColor(strategy.type)}`}>
-                      {getTypeLabel(strategy.type)}
-                    </Badge>
-                    {strategy.isBuiltIn && (
-                      <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Built-in
-                      </Badge>
-                    )}
+
+                    {/* Status Badge */}
                     {backendStatus.isRunning && backendStatus.strategies.some(s => {
-                      // Map backend strategy names to frontend IDs
                       const strategyNameLower = s.name.toLowerCase();
                       const strategyIdLower = strategy.id.toLowerCase();
-                      
-                      // Direct match (e.g., "razor" matches "razor")
-                      if (strategyNameLower === strategyIdLower) {
-                        return s.status === 'active';
-                      }
-                      
-                      // No match
-                      return false;
+                      return strategyNameLower === strategyIdLower && s.status === 'active';
                     }) && (
-                      <Badge variant="outline" className="text-xs bg-success/20 text-success border-success/30">
-                        ⚡ Running on Backend
+                      <Badge variant="outline" className="w-full justify-center text-xs bg-success/20 text-success border-success/30 font-medium">
+                        <Zap className="w-3 h-3 mr-1" />
+                        Running on Backend
                       </Badge>
                     )}
-                  </div>
-                </Card>
-              ))
+                  </Card>
+                );
+              })
             )}
           </div>
         </ScrollArea>
