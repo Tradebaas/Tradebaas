@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTradingStore } from '@/state/store';
+import { useAuthStore } from '@/stores/authStore';
+import { LoginPage } from '@/pages/LoginPage';
 import { StrategyTradingCard } from '@/components/trading/StrategyTradingCard';
 import { MetricsPage } from '@/components/metrics/MetricsPage';
 import { ConnectionStatusDialog } from '@/components/dialogs/ConnectionStatusDialog';
@@ -26,6 +28,7 @@ type Page = 'trading' | 'metrics' | 'strategies';
 
 function App() {
   const { connectionState, killSwitch, initializeClient, fetchUSDCBalance, usdcBalance, checkForOpenPosition, getClient, activePosition, loadSavedCredentials, connect } = useTradingStore();
+  const { isAuthenticated, checkAuth } = useAuthStore();
   const { entitlement, loading: licenseLoading } = useLicense();
   const { brokerName, entitlementTier, isLoading: backendLoading, error: backendError } = useBackend();
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
@@ -40,9 +43,36 @@ function App() {
   const [openPositionsCount, setOpenPositionsCount] = useState(0);
   const [initError, setInitError] = useState<string | null>(null);
   const [disclaimerDeclined, setDisclaimerDeclined] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const disclaimerAccepted = disclaimerAcceptedRaw === 'true';
   const tradingBlocked = disclaimerDeclined || !disclaimerAccepted;
+
+  // Check authentication on mount
+  useEffect(() => {
+    const initAuth = async () => {
+      await checkAuth();
+      setAuthChecked(true);
+    };
+    initAuth();
+  }, [checkAuth]);
+
+  // Show login page if not authenticated
+  if (!authChecked) {
+    // Loading auth state
+    return (
+      <div className="h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <img src={logo} alt="Tradebaas" className="h-16 w-auto mx-auto mb-4 animate-pulse" />
+          <p className="text-muted-foreground text-sm">Laden...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   useEffect(() => {
     if (backendError) {

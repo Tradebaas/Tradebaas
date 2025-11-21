@@ -30,6 +30,7 @@ import { kvStorage } from './kv-storage';
 import { registerUser, loginUser } from './services/auth-service';
 import { authenticateRequest } from './middleware/auth';
 import { userCredentialsService } from './services/user-credentials-service';
+import { userBrokerRegistry } from './user-broker-registry';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Changed from 127.0.0.1 to allow external access
@@ -366,9 +367,31 @@ server.get('/ready', async (request, reply) => {
 // GET /api/connection/status - Real-time connection status
 server.get('/api/connection/status', async (request, reply) => {
   try {
+    // If authenticated, return per-user connection status
+    let userId: string | null = null;
+    try {
+      // Fast path: check Authorization header and validate JWT (reuse middleware)
+      // We don't want to throw if unauthenticated, so wrap in try/catch
+      const authHeader = (request.headers.authorization || '') as string;
+      if (authHeader.startsWith('Bearer ')) {
+        // Call authenticateRequest manually to populate request.user
+        await (authenticateRequest as any)(request, reply);
+        userId = request.user?.userId || null;
+      }
+    } catch (err) {
+      // ignore auth errors and fall back to global status
+    }
+
+    if (userId) {
+      // For now, only deribit supported
+      const perUserStatus = userBrokerRegistry.getConnectionStatus(userId, 'deribit', 'testnet');
+      return reply.send({ success: true, perUser: perUserStatus, timestamp: Date.now() });
+    }
+
+    // Fallback: global strategy service status
     const connectionStatus = strategyService.getConnectionStatus();
     const healthMetrics = strategyService.getHealthMetrics();
-    
+
     // Get detailed WebSocket status
     const detailedStatus = {
       connected: connectionStatus.connected,
@@ -379,8 +402,8 @@ server.get('/api/connection/status', async (request, reply) => {
       manuallyDisconnected: connectionStatus.manuallyDisconnected || false,
       websocket: {
         connected: connectionStatus.connected,
-        authenticated: connectionStatus.connected, // If connected, we're authenticated
-        lastPing: Date.now(), // Current timestamp as "last ping"
+        authenticated: connectionStatus.connected,
+        lastPing: Date.now(),
       },
       health: {
         strategies: healthMetrics.strategiesActive,
@@ -389,10 +412,7 @@ server.get('/api/connection/status', async (request, reply) => {
       timestamp: Date.now()
     };
 
-    return reply.send({
-      success: true,
-      ...detailedStatus
-    });
+    return reply.send({ success: true, ...detailedStatus });
   } catch (error: any) {
     return reply.code(500).send({
       success: false,
@@ -620,9 +640,9 @@ server.delete('/api/credentials/:service', async (request) => {
 });
 
 // Broker connection endpoint (manual connect only)
-server.post<{ Body: { environment: 'testnet' | 'live' } }>('/api/v2/connect', async (request, reply) => {
+server.post<{ Body: { environment: 'testnet' | 'live'; broker?: string } }>('/api/v2/connect', { preHandler: authenticateRequest }, async (request, reply) => {
   try {
-    const { environment } = request.body;
+    const { environment, broker } = request.body as { environment: 'testnet' | 'live'; broker?: string };
     
     if (!environment || !['testnet', 'live'].includes(environment)) {
       return reply.code(400).send({
@@ -630,18 +650,18 @@ server.post<{ Body: { environment: 'testnet' | 'live' } }>('/api/v2/connect', as
         error: 'Invalid environment. Must be "testnet" or "live"',
       });
     }
+    const userId = request.user!.userId;
+    const usedBroker = broker || 'deribit';
 
-    console.log(`[API] Manual connect requested: ${environment}`);
-    
-    // Connect to broker
-    await strategyService.connect(environment);
-    
-    console.log(`[API] Successfully connected to ${environment}`);
-    
+    console.log(`[API] Manual connect requested by user ${userId}: ${usedBroker}/${environment}`);
+
+    await userBrokerRegistry.connect(userId, usedBroker, environment);
+
     return {
       success: true,
-      message: `Connected to Deribit ${environment}`,
+      message: `Connected to ${usedBroker} ${environment}`,
       environment,
+      broker: usedBroker,
     };
   } catch (error: any) {
     console.error('[API] Connection failed:', error);
@@ -653,14 +673,19 @@ server.post<{ Body: { environment: 'testnet' | 'live' } }>('/api/v2/connect', as
 });
 
 // Broker disconnect endpoint
-server.post('/api/v2/disconnect', async (request, reply) => {
+server.post('/api/v2/disconnect', { preHandler: authenticateRequest }, async (request, reply) => {
   try {
-    console.log('[API] Manual disconnect requested');
-    
-    await strategyService.disconnect();
-    
+    const { broker, environment } = request.body as { broker?: string; environment?: 'testnet' | 'live' };
+    const userId = request.user!.userId;
+    const usedBroker = broker || 'deribit';
+    const usedEnv = environment || 'testnet';
+
+    console.log(`[API] Manual disconnect requested by user ${userId}: ${usedBroker}/${usedEnv}`);
+
+    await userBrokerRegistry.disconnect(userId, usedBroker, usedEnv);
+
     console.log('[API] Successfully disconnected');
-    
+
     return {
       success: true,
       message: 'Disconnected from broker',
@@ -677,16 +702,25 @@ server.post('/api/v2/disconnect', async (request, reply) => {
 // Get account balance
 server.get('/api/v2/balance', async (request, reply) => {
   try {
-    const connectionStatus = strategyService.getConnectionStatus();
-    
-    if (!connectionStatus.connected) {
-      return reply.code(400).send({
-        success: false,
-        error: 'Not connected to broker',
-      });
+    // Prefer per-user client when authenticated
+    let client = null as any;
+    try {
+      const authHeader = (request.headers.authorization || '') as string;
+      if (authHeader.startsWith('Bearer ')) {
+        await (authenticateRequest as any)(request, reply);
+        const userId = request.user?.userId;
+        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+      }
+    } catch (err) {
+      // ignore
     }
-    
-    // Get USDC balance (for perpetuals trading)
+
+    if (!client) client = strategyService.getClient();
+
+    if (!client || !client.isConnected()) {
+      return reply.code(400).send({ success: false, error: 'Not connected to broker' });
+    }
+
     const balance = await strategyService.getBalance('USDC');
     
     if (!balance) {
@@ -714,16 +748,21 @@ server.get('/api/v2/balance', async (request, reply) => {
 // Get open positions
 server.get('/api/v2/positions', async (request, reply) => {
   try {
-    const connectionStatus = strategyService.getConnectionStatus();
-    
-    if (!connectionStatus.connected) {
-      return reply.code(400).send({
-        success: false,
-        error: 'Not connected to broker',
-      });
-    }
-    
-    const positions = await strategyService.getPositions('USDC');
+    let client = null as any;
+    try {
+      const authHeader = (request.headers.authorization || '') as string;
+      if (authHeader.startsWith('Bearer ')) {
+        await (authenticateRequest as any)(request, reply);
+        const userId = request.user?.userId;
+        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+      }
+    } catch (err) {}
+
+    if (!client) client = strategyService.getClient();
+
+    if (!client || !client.isConnected()) return reply.code(400).send({ success: false, error: 'Not connected to broker' });
+
+    const positions = await client.getPositions('USDC');
     
     return {
       success: true,
@@ -742,16 +781,20 @@ server.get('/api/v2/positions', async (request, reply) => {
 server.get('/api/v2/orders/:instrument', async (request, reply) => {
   try {
     const { instrument } = request.params as { instrument: string };
-    const connectionStatus = strategyService.getConnectionStatus();
-    
-    if (!connectionStatus.connected) {
-      return reply.code(400).send({
-        success: false,
-        error: 'Not connected to broker',
-      });
-    }
-    
-    const orders = await strategyService.getOpenOrders(instrument);
+    let client = null as any;
+    try {
+      const authHeader = (request.headers.authorization || '') as string;
+      if (authHeader.startsWith('Bearer ')) {
+        await (authenticateRequest as any)(request, reply);
+        const userId = request.user?.userId;
+        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+      }
+    } catch (err) {}
+
+    if (!client) client = strategyService.getClient();
+    if (!client || !client.isConnected()) return reply.code(400).send({ success: false, error: 'Not connected to broker' });
+
+    const orders = await client.getOpenOrders(instrument);
     
     return {
       success: true,
@@ -770,16 +813,20 @@ server.get('/api/v2/orders/:instrument', async (request, reply) => {
 server.get('/api/v2/ticker/:instrument', async (request, reply) => {
   try {
     const { instrument } = request.params as { instrument: string };
-    const connectionStatus = strategyService.getConnectionStatus();
-    
-    if (!connectionStatus.connected) {
-      return reply.code(400).send({
-        success: false,
-        error: 'Not connected to broker',
-      });
-    }
-    
-    const ticker = await strategyService.getTicker(instrument);
+    let client = null as any;
+    try {
+      const authHeader = (request.headers.authorization || '') as string;
+      if (authHeader.startsWith('Bearer ')) {
+        await (authenticateRequest as any)(request, reply);
+        const userId = request.user?.userId;
+        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+      }
+    } catch (err) {}
+
+    if (!client) client = strategyService.getClient();
+    if (!client || !client.isConnected()) return reply.code(400).send({ success: false, error: 'Not connected to broker' });
+
+    const ticker = await client.getTicker(instrument);
     
     if (!ticker) {
       return reply.code(404).send({
@@ -805,17 +852,20 @@ server.get('/api/v2/ticker/:instrument', async (request, reply) => {
 server.post('/api/v2/test-order', async (request, reply) => {
   try {
     // Use both connection checks for safety
-    const connectionStatus = strategyService.getConnectionStatus();
-    
-    if (!connectionStatus.connected) {
-      return reply.code(400).send({
-        success: false,
-        error: 'Not connected to broker - WebSocket connection lost',
-      });
-    }
-    
-    console.log('[API] Test order request with connection:', connectionStatus);
-    
+    let client = null as any;
+    try {
+      const authHeader = (request.headers.authorization || '') as string;
+      if (authHeader.startsWith('Bearer ')) {
+        await (authenticateRequest as any)(request, reply);
+        const userId = request.user?.userId;
+        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+      }
+    } catch (err) {}
+
+    if (!client) client = strategyService.getClient();
+    if (!client || !client.isConnected()) return reply.code(400).send({ success: false, error: 'Not connected to broker - WebSocket connection lost' });
+
+    console.log('[API] Test order request with connection');
     const result = await strategyService.placeTestOrder();
     
     if (result.success) {
@@ -846,15 +896,19 @@ server.post<{ Body: { instrument: string } }>('/api/v2/positions/close', async (
       });
     }
     
-    const connectionStatus = strategyService.getConnectionStatus();
-    
-    if (!connectionStatus.connected) {
-      return reply.code(400).send({
-        success: false,
-        error: 'Not connected to broker',
-      });
-    }
-    
+    let client = null as any;
+    try {
+      const authHeader = (request.headers.authorization || '') as string;
+      if (authHeader.startsWith('Bearer ')) {
+        await (authenticateRequest as any)(request, reply);
+        const userId = request.user?.userId;
+        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+      }
+    } catch (err) {}
+
+    if (!client) client = strategyService.getClient();
+    if (!client || !client.isConnected()) return reply.code(400).send({ success: false, error: 'Not connected to broker' });
+
     await strategyService.closePosition(instrument);
     
     return {

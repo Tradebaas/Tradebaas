@@ -45,13 +45,31 @@ class BackendAPI {
     this.baseUrl = baseUrl;
   }
 
+  /**
+   * Get auth headers with JWT token if available
+   */
+  private getAuthHeaders(): HeadersInit {
+    const token = localStorage.getItem('tradebaas:auth-token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+  }
+
   // ============================================================================
   // CONNECTION & CREDENTIALS
   // ============================================================================
 
   async getStatus(): Promise<BackendStrategyStatus> {
     // Use V2 API which returns proper structure
-    const response = await fetch(`${this.baseUrl}/api/strategy/status/v2`);
+    const response = await fetch(`${this.baseUrl}/api/strategy/status/v2`, {
+      headers: this.getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Failed to fetch status');
     
     const data = await response.json();
@@ -61,7 +79,9 @@ class BackendAPI {
     }
     
     // Map V2 response to BackendStrategyStatus interface
-    const connectionResponse = await fetch(`${this.baseUrl}/api/connection/status`);
+    const connectionResponse = await fetch(`${this.baseUrl}/api/connection/status`, {
+      headers: this.getAuthHeaders(),
+    });
     const connectionData = await connectionResponse.json();
     
     return {
@@ -86,20 +106,23 @@ class BackendAPI {
     
     const response = await fetch(`${this.baseUrl}/api/credentials`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify({ service, credentials: credentialsArray }),
     });
     return await response.json();
   }
 
   async getCredentials(service: string): Promise<{ success: boolean; credentials?: DeribitCredentials }> {
-    const response = await fetch(`${this.baseUrl}/api/credentials/${service}`);
+    const response = await fetch(`${this.baseUrl}/api/credentials/${service}`, {
+      headers: this.getAuthHeaders(),
+    });
     return await response.json();
   }
 
   async deleteCredentials(service: string): Promise<{ success: boolean }> {
     const response = await fetch(`${this.baseUrl}/api/credentials/${service}`, {
       method: 'DELETE',
+      headers: this.getAuthHeaders(),
     });
     return await response.json();
   }
@@ -114,7 +137,7 @@ class BackendAPI {
     // 2. Call explicit connect endpoint
     const response = await fetch(`${this.baseUrl}/api/v2/connect`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify({ environment }),
     });
 
@@ -131,6 +154,7 @@ class BackendAPI {
     // Call explicit disconnect endpoint - NO body, NO content-type
     const response = await fetch(`${this.baseUrl}/api/v2/disconnect`, {
       method: 'POST',
+      headers: this.getAuthHeaders(),
     });
 
     const result = await response.json();
@@ -150,12 +174,16 @@ class BackendAPI {
   // ============================================================================
 
   async listStrategies(): Promise<{ success: boolean; strategies: BackendStrategy[] }> {
-    const response = await fetch(`${this.baseUrl}/api/v2/strategies`);
+    const response = await fetch(`${this.baseUrl}/api/v2/strategies`, {
+      headers: this.getAuthHeaders(),
+    });
     return await response.json();
   }
 
   async getStrategy(id: string): Promise<{ success: boolean; strategy: BackendStrategy }> {
-    const response = await fetch(`${this.baseUrl}/api/v2/strategies/${id}`);
+    const response = await fetch(`${this.baseUrl}/api/v2/strategies/${id}`, {
+      headers: this.getAuthHeaders(),
+    });
     return await response.json();
   }
 
@@ -167,7 +195,7 @@ class BackendAPI {
   }): Promise<{ success: boolean; error?: string }> {
     const response = await fetch(`${this.baseUrl}/api/strategy/start`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(params),
     });
     return await response.json();
@@ -176,18 +204,23 @@ class BackendAPI {
   async stopStrategy(): Promise<{ success: boolean; error?: string }> {
     const response = await fetch(`${this.baseUrl}/api/strategy/stop`, {
       method: 'POST',
+      headers: this.getAuthHeaders(),
     });
     return await response.json();
   }
 
   async getStrategyAnalysis(strategyId: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/api/strategy/analysis/${strategyId}`);
+    const response = await fetch(`${this.baseUrl}/api/strategy/analysis/${strategyId}`, {
+      headers: this.getAuthHeaders(),
+    });
     const data = await response.json();
     return data.success ? data.analysis : null;
   }
 
   async getStrategyMetrics(strategyId: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/api/strategy/metrics/${strategyId}`);
+    const response = await fetch(`${this.baseUrl}/api/strategy/metrics/${strategyId}`, {
+      headers: this.getAuthHeaders(),
+    });
     const data = await response.json();
     return data.success ? data.metrics : null;
   }
@@ -199,6 +232,7 @@ class BackendAPI {
   async killSwitch(): Promise<{ success: boolean }> {
     const response = await fetch(`${this.baseUrl}/api/killswitch`, {
       method: 'POST',
+      headers: this.getAuthHeaders(),
     });
     return await response.json();
   }
@@ -209,7 +243,9 @@ class BackendAPI {
 
   async getBalance(): Promise<{ balance: number }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/v2/balance`);
+      const response = await fetch(`${this.baseUrl}/api/v2/balance`, {
+        headers: this.getAuthHeaders(),
+      });
       const result = await response.json();
       
       if (!response.ok || !result.success) {
@@ -231,7 +267,9 @@ class BackendAPI {
 
   async getPositions(): Promise<{ success: boolean; positions: any[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/v2/positions`);
+      const response = await fetch(`${this.baseUrl}/api/v2/positions`, {
+        headers: this.getAuthHeaders(),
+      });
       const result = await response.json();
       
       if (!response.ok || !result.success) {
@@ -248,7 +286,7 @@ class BackendAPI {
     try {
       const response = await fetch(`${this.baseUrl}/api/v2/positions/close`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify({ instrument }),
       });
       
@@ -266,7 +304,9 @@ class BackendAPI {
 
   async getTicker(instrument: string): Promise<{ success: boolean; ticker?: any; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/v2/ticker/${encodeURIComponent(instrument)}`);
+      const response = await fetch(`${this.baseUrl}/api/v2/ticker/${encodeURIComponent(instrument)}`, {
+        headers: this.getAuthHeaders(),
+      });
       const result = await response.json();
       
       if (!response.ok || !result.success) {
@@ -281,7 +321,9 @@ class BackendAPI {
 
   async getOpenOrders(instrument: string): Promise<{ success: boolean; orders?: any[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/v2/orders/${encodeURIComponent(instrument)}`);
+      const response = await fetch(`${this.baseUrl}/api/v2/orders/${encodeURIComponent(instrument)}`, {
+        headers: this.getAuthHeaders(),
+      });
       const result = await response.json();
       
       if (!response.ok || !result.success) {
@@ -299,7 +341,9 @@ class BackendAPI {
   // ============================================================================
 
   async health(): Promise<{ status: string; uptime: number }> {
-    const response = await fetch(`${this.baseUrl}/health`);
+    const response = await fetch(`${this.baseUrl}/health`, {
+      headers: this.getAuthHeaders(),
+    });
     return await response.json();
   }
 }
