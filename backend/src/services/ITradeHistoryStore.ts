@@ -9,6 +9,9 @@ export interface TradeRecord {
   /** Unique trade ID */
   id: string;
   
+  /** User ID (for multi-user support) - FASE 3 */
+  userId?: string;
+  
   /** Strategy that executed this trade */
   strategyName: string;
   
@@ -68,6 +71,9 @@ export interface TradeRecord {
 }
 
 export interface TradeHistoryQuery {
+  /** Filter by user ID (multi-user support) - FASE 3 */
+  userId?: string;
+  
   /** Filter by strategy name */
   strategyName?: string;
   

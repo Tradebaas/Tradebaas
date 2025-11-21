@@ -15,11 +15,10 @@ import { CurrentPositionCard } from '@/components/trading/CurrentPositionCard';
 import { Badge } from '@/components/ui/badge';
 
 interface StrategyTradingCardProps {
-  tradingBlocked?: boolean;
-  onOpenDisclaimer?: () => void;
+  // No props needed - disclaimer handled in registration
 }
 
-export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }: StrategyTradingCardProps) {
+export function StrategyTradingCard(props?: StrategyTradingCardProps) {
   const { 
     connectionState, 
     riskSettings, 
@@ -138,11 +137,6 @@ export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }
   }, [savedRiskSettings, setRiskSettings]);
 
   const handleStrategyToggle = async () => {
-    if (tradingBlocked) {
-      toast.error('Accepteer eerst de disclaimer om trade functionaliteit te gebruiken');
-      return;
-    }
-    
     // NEW LOGIC based on status:
     // - analyzing/active → STOP (pause if position open)
     // - paused → QUEUE for after position close (DON'T start immediately!)
@@ -322,7 +316,7 @@ export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }
               <Select 
                 value={selectedStrategy} 
                 onValueChange={setSelectedStrategy} 
-                disabled={tradingBlocked || (actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy))}
+                disabled={actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy)}
               >
                 <SelectTrigger className="bg-muted/30 border-border/30 h-11 rounded-lg">
                   <SelectValue placeholder="Kies een strategie" />
@@ -332,20 +326,6 @@ export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }
                   <SelectItem value="thor">Thor</SelectItem>
                 </SelectContent>
               </Select>
-              {tradingBlocked && (
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-xs text-destructive flex items-center gap-1.5">
-                    <Warning className="w-3 h-3" weight="fill" />
-                    Accepteer disclaimer om te kunnen traden
-                  </p>
-                  <button
-                    onClick={onOpenDisclaimer}
-                    className="text-xs text-accent hover:text-accent/80 underline underline-offset-2 font-medium transition-colors"
-                  >
-                    Open disclaimer
-                  </button>
-                </div>
-              )}
             </div>
             
             <div className="space-y-2">
@@ -353,7 +333,7 @@ export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }
               <Select 
                 value={riskSettings.mode} 
                 onValueChange={handleRiskModeChange} 
-                disabled={tradingBlocked || (actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy))}
+                disabled={actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy)}
               >
                 <SelectTrigger className="bg-muted/30 border-border/30 h-11 rounded-lg">
                   <SelectValue />
@@ -369,7 +349,7 @@ export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleRiskDecrement}
-                  disabled={tradingBlocked || (actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy))}
+                  disabled={actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy)}
                   className="flex items-center justify-center w-11 h-11 rounded-lg bg-muted/30 hover:bg-muted/50 text-foreground transition-all border border-border/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   type="button"
                 >
@@ -382,7 +362,7 @@ export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }
                 </div>
                 <button
                   onClick={handleRiskIncrement}
-                  disabled={tradingBlocked || (actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy))}
+                  disabled={actualStrategyStatus !== 'stopped' && !(actualStrategyStatus === 'in-position' && !strategy)}
                   className="flex items-center justify-center w-11 h-11 rounded-lg bg-muted/30 hover:bg-muted/50 text-foreground transition-all border border-border/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   type="button"
                 >
@@ -399,7 +379,6 @@ export function StrategyTradingCard({ tradingBlocked = false, onOpenDisclaimer }
             <Button
               onClick={handleStrategyToggle}
               disabled={
-                tradingBlocked || 
                 !isConnected ||
                 activePosition !== null || // CRITICAL: Can't start/stop during open position (store check)
                 backendStatus.hasOpenPosition || // CRITICAL: Can't start/stop during open position (backend check)

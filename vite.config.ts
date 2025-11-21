@@ -18,13 +18,16 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0', // Listen on all network interfaces
-    port: 5173, // Vite default port for dev server
+    port: 5000, // Production port (was 5173)
     strictPort: false, // Allow fallback if needed
-    allowedHosts: ['localhost', '127.0.0.1'], // Add your production domain here
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      'app.tradebazen.nl',
+      '.tradebazen.nl', // Allow all subdomains
+    ],
     hmr: {
-      clientPort: 443, // HMR via HTTPS reverse proxy
-      protocol: 'wss', // WebSocket Secure for HMR
-      host: 'localhost', // Change to your production domain
+      overlay: true, // Show errors in overlay
     },
     watch: {
       // Ignore backend files that change frequently

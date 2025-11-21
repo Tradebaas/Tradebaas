@@ -11,7 +11,6 @@ import { useTradingStore } from '@/state/store';
 import { useKV } from '@/hooks/use-kv-polyfill';
 import { Eye, EyeSlash, PaperPlaneTilt, CheckCircle, XCircle, Bug, Warning } from '@phosphor-icons/react';
 import { TestTradeCard } from '@/components/trading/TestTradeCard';
-import { LegalDisclaimerDialog } from '@/components/dialogs/LegalDisclaimerDialog';
 import { DebugDetailsDialog, type DebugInfo } from '@/components/dialogs/DebugDetailsDialog';
 import { createTelegramNotifier, type TelegramConfig } from '@/lib/telegram';
 import { credentialsClient } from '@/lib/credentials-client';
@@ -21,11 +20,9 @@ interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStatusClick: () => void;
-  tradingBlocked?: boolean;
-  onOpenDisclaimer?: () => void;
 }
 
-export function SettingsDialog({ open, onOpenChange, onStatusClick, tradingBlocked = false, onOpenDisclaimer }: SettingsDialogProps) {
+export function SettingsDialog({ open, onOpenChange, onStatusClick }: SettingsDialogProps) {
   const {
     connectionState,
     environment,
@@ -43,10 +40,7 @@ export function SettingsDialog({ open, onOpenChange, onStatusClick, tradingBlock
   const [showSecret, setShowSecret] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [credentialsSource, setCredentialsSource] = useState<'none' | 'backend' | 'local'>('none');
-  const [disclaimerAcceptedRaw, setDisclaimerAcceptedRaw] = useKV('legal-disclaimer-accepted', 'false');
   const [telemetryEnabledRaw, setTelemetryEnabledRaw] = useKV('telemetry-enabled', 'false');
-  const [showDisclaimer, setShowDisclaimer] = useState(false);
-  const [pendingEnvironment, setPendingEnvironment] = useState<'live' | 'testnet' | null>(null);
   
   const [telegramBotToken, setTelegramBotToken] = useKV('telegram-bot-token', '');
   const [telegramChatId, setTelegramChatId] = useKV('telegram-chat-id', '');
@@ -62,7 +56,6 @@ export function SettingsDialog({ open, onOpenChange, onStatusClick, tradingBlock
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [showDebugDialog, setShowDebugDialog] = useState(false);
 
-  const disclaimerAccepted = disclaimerAcceptedRaw === 'true';
   const telemetryEnabled = telemetryEnabledRaw === 'true';
   const telegramEnabled = telegramEnabledRaw === 'true';
   const notionEnabled = notionEnabledRaw === 'true';
@@ -160,22 +153,7 @@ export function SettingsDialog({ open, onOpenChange, onStatusClick, tradingBlock
 
   const handleEnvironmentToggle = (checked: boolean) => {
     const newEnv = checked ? 'testnet' : 'live';
-    
-    if (newEnv === 'live' && !disclaimerAccepted) {
-      setPendingEnvironment(newEnv);
-      setShowDisclaimer(true);
-      return;
-    }
-    
     setEnvironment(newEnv);
-  };
-
-  const handleDisclaimerAccept = () => {
-    setDisclaimerAcceptedRaw('true');
-    if (pendingEnvironment) {
-      setEnvironment(pendingEnvironment);
-      setPendingEnvironment(null);
-    }
   };
 
   const handleTestTelegram = async () => {
@@ -640,7 +618,7 @@ export function SettingsDialog({ open, onOpenChange, onStatusClick, tradingBlock
 
             <div className="pt-4 border-t border-border/20">
               <h3 className="text-sm font-medium mb-3">Test Trade</h3>
-              <TestTradeCard tradingBlocked={tradingBlocked} onOpenDisclaimer={onOpenDisclaimer} />
+              <TestTradeCard />
             </div>
           </TabsContent>
 
@@ -988,12 +966,6 @@ export function SettingsDialog({ open, onOpenChange, onStatusClick, tradingBlock
             </div>
           </TabsContent>
         </Tabs>
-
-        <LegalDisclaimerDialog
-          open={showDisclaimer}
-          onOpenChange={setShowDisclaimer}
-          onAccept={handleDisclaimerAccept}
-        />
         
         <DebugDetailsDialog
           open={showDebugDialog}

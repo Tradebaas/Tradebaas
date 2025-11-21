@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react';
 import { useTradingStore } from '@/state/store';
 import { useAuthStore } from '@/stores/authStore';
 import { LoginPage } from '@/pages/LoginPage';
+import { AdminPanel } from '@/components/admin/AdminPanel';
 import { StrategyTradingCard } from '@/components/trading/StrategyTradingCard';
 import { MetricsPage } from '@/components/metrics/MetricsPage';
 import { ConnectionStatusDialog } from '@/components/dialogs/ConnectionStatusDialog';
 import { SettingsDialog } from '@/components/dialogs/SettingsDialog';
 import { LicenseDialog } from '@/components/dialogs/LicenseDialog';
-import { LegalDisclaimerDialog } from '@/components/dialogs/LegalDisclaimerDialog';
 import { KillSwitchConfirmDialog } from '@/components/dialogs/KillSwitchConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Toaster } from '@/components/ui/sonner';
-import { Power, Gear, ChartLine, Strategy, FileDashed, ShieldCheck } from '@phosphor-icons/react';
+import { Power, Gear, ChartLine, Strategy, FileDashed, ShieldCheck, UserGear, SignOut } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { StatusPill } from '@/components/layout/StatusPill';
 import { StrategiesPage } from '@/components/metrics/StrategiesPage';
@@ -20,33 +20,14 @@ import { AppFooter } from '@/components/layout/AppFooter';
 import { PrivacyPolicyDialog } from '@/components/dialogs/PrivacyPolicyDialog';
 import { useLicense } from '@/hooks/use-license';
 import { useBackend } from '@/hooks/use-backend';
-import { useKV } from '@/hooks/use-kv-polyfill';
 import { backendAPI } from '@/lib/backend-api';
 import logo from '@/assets/images/Icon_yellow.png';
 
-type Page = 'trading' | 'metrics' | 'strategies';
+type Page = 'trading' | 'metrics' | 'strategies' | 'admin';
 
 function App() {
-  const { connectionState, killSwitch, initializeClient, fetchUSDCBalance, usdcBalance, checkForOpenPosition, getClient, activePosition, loadSavedCredentials, connect } = useTradingStore();
-  const { isAuthenticated, checkAuth } = useAuthStore();
-  const { entitlement, loading: licenseLoading } = useLicense();
-  const { brokerName, entitlementTier, isLoading: backendLoading, error: backendError } = useBackend();
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
-  const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
-  const [killSwitchConfirmOpen, setKillSwitchConfirmOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState<Page>('trading');
-  const [disclaimerAcceptedRaw, setDisclaimerAcceptedRaw] = useKV('disclaimer-accepted', 'false');
-  const [showFirstRunDisclaimer, setShowFirstRunDisclaimer] = useState(false);
-  const [privacyDialogOpen, setPrivacyDialogOpen] = useState(false);
-  const [hasOpenPositions, setHasOpenPositions] = useState(false);
-  const [openPositionsCount, setOpenPositionsCount] = useState(0);
-  const [initError, setInitError] = useState<string | null>(null);
-  const [disclaimerDeclined, setDisclaimerDeclined] = useState(false);
+  const { user, isAuthenticated, checkAuth } = useAuthStore();
   const [authChecked, setAuthChecked] = useState(false);
-
-  const disclaimerAccepted = disclaimerAcceptedRaw === 'true';
-  const tradingBlocked = disclaimerDeclined || !disclaimerAccepted;
 
   // Check authentication on mount
   useEffect(() => {
@@ -74,6 +55,25 @@ function App() {
     return <LoginPage />;
   }
 
+  // Only call these hooks after authentication is confirmed
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
+  const { connectionState, killSwitch, initializeClient, fetchUSDCBalance, usdcBalance, checkForOpenPosition, getClient, activePosition, loadSavedCredentials, connect } = useTradingStore();
+  const { user, logout } = useAuthStore();
+  const { entitlement, loading: licenseLoading } = useLicense();
+  const { brokerName, entitlementTier, isLoading: backendLoading, error: backendError } = useBackend();
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
+  const [killSwitchConfirmOpen, setKillSwitchConfirmOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState<Page>('trading');
+  const [privacyDialogOpen, setPrivacyDialogOpen] = useState(false);
+  const [hasOpenPositions, setHasOpenPositions] = useState(false);
+  const [openPositionsCount, setOpenPositionsCount] = useState(0);
+  const [initError, setInitError] = useState<string | null>(null);
+
   useEffect(() => {
     if (backendError) {
       if (backendError.includes('429') || backendError.includes('timeout') || backendError.includes('Backend')) {
@@ -96,14 +96,10 @@ function App() {
       store.startRealTimeConnectionPolling();
       
       console.log('[App] Started backend status polling for connection sync');
-      
-      if (!disclaimerAccepted) {
-        setShowFirstRunDisclaimer(true);
-      }
     };
 
     initializeApp();
-  }, [initializeClient, disclaimerAccepted]);
+  }, [initializeClient]);
 
   useEffect(() => {
     if (connectionState === 'Active') {
@@ -155,16 +151,6 @@ function App() {
     toast.error('Systeem gestopt');
   };
 
-  const handleFirstRunDisclaimerAccept = () => {
-    setDisclaimerAcceptedRaw('true');
-    setDisclaimerDeclined(false);
-  };
-
-  const handleFirstRunDisclaimerDecline = () => {
-    setDisclaimerDeclined(true);
-    toast.error('Trade functionaliteit is uitgeschakeld. Accepteer de disclaimer om te kunnen traden.');
-  };
-
   const formatBalance = (balance: number | null): string => {
     if (balance === null) return '—';
     return balance.toFixed(0);
@@ -198,6 +184,16 @@ function App() {
           </div>
           
           <div className="flex items-center gap-1.5">
+            {user?.isAdmin && (
+              <Button
+                onClick={() => setCurrentPage('admin')}
+                size="sm"
+                variant={currentPage === 'admin' ? 'default' : 'ghost'}
+                className="h-9 px-3"
+              >
+                <UserGear className="w-5 h-5" />
+              </Button>
+            )}
             {usdcBalance !== null && (
               <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-md bg-card/40 border border-border/20 text-xs">
                 <span className="text-muted-foreground">USDC</span>
@@ -219,6 +215,15 @@ function App() {
               <Gear className="w-5 h-5" />
             </Button>
             <Button
+              onClick={logout}
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/30 h-9 w-9 p-0 rounded-md transition-colors"
+              title="Uitloggen"
+            >
+              <SignOut className="w-5 h-5" />
+            </Button>
+            <Button
               onClick={handleKillSwitchClick}
               size="sm"
               variant="ghost"
@@ -232,12 +237,11 @@ function App() {
 
       <main className="flex-1 min-h-0 overflow-hidden">
         {currentPage === 'trading' ? (
-          <StrategyTradingCard 
-            tradingBlocked={tradingBlocked} 
-            onOpenDisclaimer={() => setShowFirstRunDisclaimer(true)}
-          />
+          <StrategyTradingCard />
         ) : currentPage === 'metrics' ? (
           <MetricsPage />
+        ) : currentPage === 'admin' ? (
+          <AdminPanel />
         ) : (
           <StrategiesPage />
         )}
@@ -265,8 +269,6 @@ function App() {
           setSettingsDialogOpen(false);
           setStatusDialogOpen(true);
         }}
-        tradingBlocked={tradingBlocked}
-        onOpenDisclaimer={() => setShowFirstRunDisclaimer(true)}
       />
       
       <ConnectionStatusDialog 
@@ -277,13 +279,6 @@ function App() {
       <LicenseDialog
         open={licenseDialogOpen}
         onOpenChange={setLicenseDialogOpen}
-      />
-
-      <LegalDisclaimerDialog
-        open={showFirstRunDisclaimer}
-        onOpenChange={setShowFirstRunDisclaimer}
-        onAccept={handleFirstRunDisclaimerAccept}
-        onDecline={handleFirstRunDisclaimerDecline}
       />
 
       <PrivacyPolicyDialog

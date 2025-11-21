@@ -19,6 +19,8 @@ import {
   handleStopStrategy,
   handleGetTradeHistory,
   handleGetTradeStats,
+  handleUserGetTradeHistory,
+  handleUserGetTradeStats,
   handleSyncCurrentPosition,
   type StrategyStartRequest as NewStrategyStartRequest
 } from './api';
@@ -28,9 +30,11 @@ import { telegramService } from './notifications/telegram';
 
 import { kvStorage } from './kv-storage';
 import { registerUser, loginUser } from './services/auth-service';
-import { authenticateRequest } from './middleware/auth';
+import { authenticateRequest, requireAdmin } from './middleware/auth';
 import { userCredentialsService } from './services/user-credentials-service';
 import { userBrokerRegistry } from './user-broker-registry';
+import { pool } from './db';
+import { hashPassword } from './services/auth-service';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Changed from 127.0.0.1 to allow external access
@@ -94,12 +98,16 @@ const wsServer = new AnalysisWebSocketServer();
 // AUTHENTICATION ENDPOINTS (FASE 1 - MULTI USER SAAS)
 // ============================================================================
 
-server.post('/auth/register', async (request, reply) => {
+server.post('/api/auth/register', async (request, reply) => {
   try {
-    const body = request.body as { email?: string; password?: string; fullName?: string };
+    const body = request.body as { email?: string; password?: string; fullName?: string; disclaimerAccepted?: boolean };
 
     if (!body?.email || !body?.password) {
       return reply.code(400).send({ success: false, error: 'Email and password are required' });
+    }
+
+    if (!body.disclaimerAccepted) {
+      return reply.code(400).send({ success: false, error: 'You must accept the disclaimer to register' });
     }
 
     // Basic, conservative validation for now
@@ -117,6 +125,7 @@ server.post('/auth/register', async (request, reply) => {
       email,
       password,
       fullName: body.fullName,
+      disclaimerAccepted: body.disclaimerAccepted,
     });
 
     return reply.code(201).send({
@@ -125,6 +134,7 @@ server.post('/auth/register', async (request, reply) => {
         id: user.id,
         email: user.email,
         fullName: user.full_name,
+        isAdmin: user.is_admin,
         createdAt: user.created_at,
       },
     });
@@ -138,7 +148,7 @@ server.post('/auth/register', async (request, reply) => {
   }
 });
 
-server.post('/auth/login', async (request, reply) => {
+server.post('/api/auth/login', async (request, reply) => {
   try {
     const body = request.body as { email?: string; password?: string };
 
@@ -158,6 +168,7 @@ server.post('/auth/login', async (request, reply) => {
         id: user.id,
         email: user.email,
         fullName: user.full_name,
+        isAdmin: user.is_admin,
       },
     });
   } catch (error: any) {
@@ -166,11 +177,128 @@ server.post('/auth/login', async (request, reply) => {
   }
 });
 
-server.get('/auth/me', { preHandler: authenticateRequest }, async (request) => {
+server.get('/api/auth/me', { preHandler: authenticateRequest }, async (request) => {
   return {
     success: true,
     user: request.user,
   };
+});
+
+// ============================================================================
+// ADMIN ENDPOINTS (User Management)
+// ============================================================================
+
+// Get all users (admin only)
+server.get('/api/admin/users', { preHandler: requireAdmin }, async (request, reply) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, email, full_name, is_admin, is_active, created_at, last_login 
+       FROM users 
+       ORDER BY created_at DESC`
+    );
+
+    return {
+      success: true,
+      users: result.rows,
+    };
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to get users');
+    return reply.code(500).send({ success: false, error: 'Failed to get users' });
+  }
+});
+
+// Reset user password (admin only)
+server.post('/api/admin/users/:userId/reset-password', { preHandler: requireAdmin }, async (request, reply) => {
+  try {
+    const { userId } = request.params as { userId: string };
+    const body = request.body as { newPassword?: string };
+
+    if (!body?.newPassword || body.newPassword.length < 12) {
+      return reply.code(400).send({
+        success: false,
+        error: 'New password must be at least 12 characters',
+      });
+    }
+
+    const passwordHash = await hashPassword(body.newPassword);
+
+    const result = await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, email',
+      [passwordHash, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.code(404).send({ success: false, error: 'User not found' });
+    }
+
+    request.log.info({ userId, adminEmail: request.user!.email }, 'Admin reset user password');
+
+    return {
+      success: true,
+      message: `Password reset for ${result.rows[0].email}`,
+    };
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to reset password');
+    return reply.code(500).send({ success: false, error: 'Failed to reset password' });
+  }
+});
+
+// Toggle user active status (admin only)
+server.post('/api/admin/users/:userId/toggle-active', { preHandler: requireAdmin }, async (request, reply) => {
+  try {
+    const { userId } = request.params as { userId: string };
+
+    const result = await pool.query(
+      'UPDATE users SET is_active = NOT is_active WHERE id = $1 RETURNING id, email, is_active',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.code(404).send({ success: false, error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+    request.log.info({ userId, isActive: user.is_active, adminEmail: request.user!.email }, 'Admin toggled user status');
+
+    return {
+      success: true,
+      user,
+    };
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to toggle user status');
+    return reply.code(500).send({ success: false, error: 'Failed to toggle user status' });
+  }
+});
+
+// Delete user (admin only)
+server.delete('/api/admin/users/:userId', { preHandler: requireAdmin }, async (request, reply) => {
+  try {
+    const { userId } = request.params as { userId: string };
+
+    // Don't allow deleting yourself
+    if (userId === request.user!.userId) {
+      return reply.code(400).send({ success: false, error: 'Cannot delete your own account' });
+    }
+
+    const result = await pool.query(
+      'DELETE FROM users WHERE id = $1 RETURNING email',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.code(404).send({ success: false, error: 'User not found' });
+    }
+
+    request.log.info({ userId, deletedEmail: result.rows[0].email, adminEmail: request.user!.email }, 'Admin deleted user');
+
+    return {
+      success: true,
+      message: `User ${result.rows[0].email} deleted`,
+    };
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to delete user');
+    return reply.code(500).send({ success: false, error: 'Failed to delete user' });
+  }
 });
 
 // ============================================================================
@@ -494,6 +622,104 @@ server.post('/api/strategy/stop/v2', async (request, reply) => {
     return reply.code(500).send({
       success: false,
       error: error.message || 'Failed to stop strategy',
+    });
+  }
+});
+
+// ============================================================================
+// PER-USER STRATEGY ENDPOINTS (NEW - FASE 2)
+// ============================================================================
+
+import { 
+  handleUserStartStrategy, 
+  handleUserStopStrategy, 
+  handleUserGetStrategyStatus,
+  type UserStrategyStartResponse,
+  type UserStrategyStopResponse
+} from './api';
+
+// GET /api/user/strategy/status - Get user's strategy status
+server.get('/api/user/strategy/status', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const userId = (request as any).user.userId;
+    const { broker, environment } = request.query as { broker?: string; environment?: any };
+    
+    const response = await handleUserGetStrategyStatus(userId, broker, environment);
+    return reply.send(response);
+  } catch (error: any) {
+    log.error('Failed to get user strategy status', { error: error.message, stack: error.stack });
+    return reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to get strategy status',
+      strategies: [],
+    });
+  }
+});
+
+// POST /api/user/strategy/start - Start strategy for authenticated user
+server.post('/api/user/strategy/start', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const userId = (request as any).user.userId;
+    const { strategyName, instrument, config, broker, environment } = request.body as {
+      strategyName: string;
+      instrument: string;
+      config: Record<string, any>;
+      broker?: string;
+      environment: 'live' | 'testnet';
+    };
+    
+    log.info('User strategy start request received', { userId, strategyName, instrument, broker, environment });
+    
+    const response = await handleUserStartStrategy({
+      userId,
+      strategyName,
+      instrument,
+      config,
+      broker,
+      environment,
+    });
+    
+    const statusCode = response.success ? 200 : 400;
+    return reply.code(statusCode).send(response);
+  } catch (error: any) {
+    log.error('Failed to start user strategy', { error: error.message, stack: error.stack });
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to start strategy',
+      error: error.message,
+    });
+  }
+});
+
+// POST /api/user/strategy/stop - Stop strategy for authenticated user
+server.post('/api/user/strategy/stop', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const userId = (request as any).user.userId;
+    const { strategyName, instrument, broker, environment } = request.body as {
+      strategyName: string;
+      instrument: string;
+      broker?: string;
+      environment: 'live' | 'testnet';
+    };
+    
+    log.info('User strategy stop request received', { userId, strategyName, instrument, broker, environment });
+    
+    const response = await handleUserStopStrategy({
+      userId,
+      strategyName,
+      instrument,
+      broker,
+      environment,
+    });
+    
+    const statusCode = response.success ? 200 : 400;
+    return reply.code(statusCode).send(response);
+  } catch (error: any) {
+    log.error('Failed to stop user strategy', { error: error.message, stack: error.stack });
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to stop strategy',
+      error: error.message,
     });
   }
 });
@@ -1420,6 +1646,88 @@ server.post<{ Body: { strategyName: string; instrument: string } }>(
   }
 );
 
+// ============================================================================
+// PER-USER TRADE HISTORY ENDPOINTS (NEW - FASE 3)
+// ============================================================================
+
+// GET /api/user/trades/history - Get authenticated user's trade history
+server.get('/api/user/trades/history', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const userId = (request as any).user.userId;
+    const queryParams = request.query as {
+      strategyName?: string;
+      instrument?: string;
+      status?: 'open' | 'closed';
+      limit?: string;
+      offset?: string;
+    };
+    
+    const response = await handleUserGetTradeHistory({
+      userId,
+      strategyName: queryParams.strategyName,
+      instrument: queryParams.instrument,
+      status: queryParams.status,
+      limit: queryParams.limit ? parseInt(queryParams.limit) : undefined,
+      offset: queryParams.offset ? parseInt(queryParams.offset) : undefined,
+    });
+    
+    return reply.send(response);
+  } catch (error: any) {
+    log.error('[API] Error getting user trade history:', error);
+    return reply.code(500).send({ 
+      success: false, 
+      trades: [],
+      total: 0,
+      error: error.message 
+    });
+  }
+});
+
+// GET /api/user/trades/stats - Get authenticated user's trade statistics
+server.get('/api/user/trades/stats', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const userId = (request as any).user.userId;
+    const queryParams = request.query as {
+      strategyName?: string;
+      instrument?: string;
+      startTime?: string;
+      endTime?: string;
+    };
+    
+    const response = await handleUserGetTradeStats({
+      userId,
+      strategyName: queryParams.strategyName,
+      instrument: queryParams.instrument,
+      startTime: queryParams.startTime ? parseInt(queryParams.startTime) : undefined,
+      endTime: queryParams.endTime ? parseInt(queryParams.endTime) : undefined,
+    });
+    
+    return reply.send(response);
+  } catch (error: any) {
+    log.error('[API] Error getting user trade stats:', error);
+    return reply.code(500).send({ 
+      success: false,
+      stats: {
+        totalTrades: 0,
+        winningTrades: 0,
+        losingTrades: 0,
+        winRate: 0,
+        totalPnl: 0,
+        avgPnl: 0,
+        bestTrade: 0,
+        worstTrade: 0,
+        slHits: 0,
+        tpHits: 0
+      },
+      error: error.message 
+    });
+  }
+});
+
+// ============================================================================
+// LEGACY TRADE HISTORY ENDPOINTS (NO AUTH - Backward Compatibility)
+// ============================================================================
+
 // Trade History API endpoints
 server.get('/api/trades/history', async (request, reply) => {
   try {
@@ -1515,6 +1823,12 @@ server.delete('/api/trades/:tradeId', async (request, reply) => {
 // Start server
 const start = async () => {
   try {
+    // Initialize user strategy service (per-user isolation)
+    console.log('[START] Initializing user strategy service...');
+    const { userStrategyService } = await import('./user-strategy-service');
+    await userStrategyService.initialize();
+    console.log('[START] User strategy service initialized');
+    
     // Initialize strategy service (auto-resume if needed)
     console.log('[START] Initializing strategy service...');
     await strategyService.initialize();

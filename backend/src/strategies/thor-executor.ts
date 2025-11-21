@@ -40,6 +40,7 @@ export class ThorExecutor {
   private config: ThorConfig;
   private strategyId: string;
   private strategyName: string;
+  private userId?: string; // FASE 3: Multi-user support
 
   private analysisState: AnalysisState;
 
@@ -56,11 +57,18 @@ export class ThorExecutor {
   // Anti-trend protection (placeholder: controlled via cooldownCandles if extended later)
   private cooldownUntilCandle: number | null = null;
 
-  constructor(client: BackendDeribitClient, strategyId: string, strategyName: string, config: ThorConfig) {
+  constructor(
+    client: BackendDeribitClient, 
+    strategyId: string, 
+    strategyName: string, 
+    config: ThorConfig,
+    userId?: string // FASE 3: Optional userId for multi-user support
+  ) {
     this.client = client;
     this.strategyId = strategyId;
     this.strategyName = strategyName;
     this.config = config;
+    this.userId = userId; // FASE 3: Store userId
 
     this.analysisState = {
       strategyId,
@@ -419,6 +427,7 @@ export class ThorExecutor {
       await ensureTradeHistoryInitialized();
       const history = getTradeHistoryService();
       this.currentTradeId = await history.recordTrade({
+        userId: this.userId, // FASE 3: Multi-user support
         strategyName: this.strategyName,
         instrument: this.config.instrument,
         side: direction === 'long' ? 'buy' : 'sell',
@@ -491,6 +500,7 @@ export class ThorExecutor {
       } else if (!open.length && existing) {
         // Create record from position
         const tradeId = await history.recordTrade({
+          userId: this.userId, // FASE 3: Multi-user support
           strategyName: this.strategyName,
           instrument: this.config.instrument,
           side: existing.size > 0 ? 'buy' : 'sell',

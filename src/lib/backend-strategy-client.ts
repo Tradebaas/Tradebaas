@@ -76,24 +76,51 @@ class BackendStrategyClient {
   }
 
   /**
+   * Get JWT token from localStorage
+   * FASE 4: Per-user authentication
+   */
+  private getAuthHeaders(): HeadersInit {
+    const token = localStorage.getItem('tradebaas:auth-token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+  }
+
+  /**
    * Start a strategy on the backend
+   * FASE 4: Updated to use /api/user/strategy/start (per-user endpoint)
    */
   async startStrategy(request: BackendStrategyStartRequest): Promise<BackendStrategyStartResponse> {
     try {
-      console.log('[BackendStrategyClient] Starting strategy on backend:', request);
+      console.log('[BackendStrategyClient] Starting strategy on backend (per-user):', request);
       
-      const response = await fetch(`${this.baseUrl}/api/strategy/start`, {
+      // FASE 4: Use per-user endpoint with JWT authentication
+      const response = await fetch(`${this.baseUrl}/api/user/strategy/start`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request),
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          strategyName: request.strategyName,
+          instrument: request.instrument,
+          config: request.config,
+          broker: 'deribit', // TODO: Make configurable from request
+          environment: request.environment,
+        }),
       });
 
       const data = await response.json();
       console.log('[BackendStrategyClient] Start response:', data);
       
-      return data;
+      return {
+        success: data.success || false,
+        strategyId: data.strategyId || '',
+        message: data.message || '',
+      };
     } catch (error) {
       console.error('[BackendStrategyClient] Failed to start strategy:', error);
       return {
@@ -106,23 +133,38 @@ class BackendStrategyClient {
 
   /**
    * Stop a strategy on the backend
+   * FASE 4: Updated to use /api/user/strategy/stop (per-user endpoint)
    */
   async stopStrategy(request: BackendStrategyStopRequest): Promise<BackendStrategyStopResponse> {
     try {
-      console.log('[BackendStrategyClient] Stopping strategy on backend:', request);
+      console.log('[BackendStrategyClient] Stopping strategy on backend (per-user):', request);
       
-      const response = await fetch(`${this.baseUrl}/api/strategy/stop`, {
+      // Extract strategyName and instrument from strategyId
+      // Format: userId:strategyName:instrument:broker:environment
+      const parts = request.strategyId.split(':');
+      const strategyName = parts.length >= 2 ? parts[1] : parts[0];
+      const instrument = parts.length >= 3 ? parts[2] : 'BTC-PERPETUAL'; // fallback
+      const environment = parts.length >= 5 ? parts[4] as 'live' | 'testnet' : 'testnet';
+      
+      // FASE 4: Use per-user endpoint with JWT authentication
+      const response = await fetch(`${this.baseUrl}/api/user/strategy/stop`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request),
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          strategyName,
+          instrument,
+          broker: 'deribit', // TODO: Make configurable
+          environment,
+        }),
       });
 
       const data = await response.json();
       console.log('[BackendStrategyClient] Stop response:', data);
       
-      return data;
+      return {
+        success: data.success || false,
+        message: data.message || '',
+      };
     } catch (error) {
       console.error('[BackendStrategyClient] Failed to stop strategy:', error);
       return {
@@ -134,15 +176,16 @@ class BackendStrategyClient {
 
   /**
    * Get strategy status from backend
+   * FASE 4: Updated to use /api/user/strategy/status (per-user endpoint)
    */
   async getStrategyStatus(strategyId?: string): Promise<BackendStrategyStatusResponse> {
     try {
-      const url = strategyId 
-        ? `${this.baseUrl}/api/strategy/status?strategyId=${strategyId}`
-        : `${this.baseUrl}/api/strategy/status`;
+      // FASE 4: Use per-user endpoint with JWT authentication
+      const url = `${this.baseUrl}/api/user/strategy/status?broker=deribit&environment=testnet`;
       
       const response = await fetch(url, {
         signal: AbortSignal.timeout(5000), // 5 second timeout
+        headers: this.getAuthHeaders(),
       });
       
       if (!response.ok) {
@@ -157,7 +200,16 @@ class BackendStrategyClient {
       }
       
       const data = JSON.parse(text);
-      return data;
+      
+      // FASE 4: Convert per-user response format to expected format
+      return {
+        success: data.success || false,
+        strategies: data.strategies || [],
+        connection: {
+          connected: data.strategies?.length > 0 || false,
+          environment: 'testnet',
+        },
+      };
     } catch (error) {
       // Only log if it's not a timeout or network issue (those are expected occasionally)
       if (error instanceof Error && !error.message.includes('aborted') && !error.message.includes('Empty')) {

@@ -9,7 +9,10 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "migrate": "tsx src/migrations/run-migrations.ts migrate",
+    "migrate:rollback": "tsx src/migrations/run-migrations.ts rollback",
+    "migrate:version": "tsx src/migrations/run-migrations.ts version"
   },
   "keywords": [
     "trading",
@@ -43,6 +46,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
+    "@types/pg": "^8.15.6",
     "@vitest/ui": "^4.0.6",
     "tsx": "^4.20.6",
     "vitest": "^4.0.6"

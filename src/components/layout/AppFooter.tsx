@@ -1,6 +1,6 @@
 import { ChartLine, ChartBar, ListChecks } from '@phosphor-icons/react';
 
-type Page = 'trading' | 'metrics' | 'strategies';
+type Page = 'trading' | 'metrics' | 'strategies' | 'admin';
 
 interface AppFooterProps {
   currentPage: Page;

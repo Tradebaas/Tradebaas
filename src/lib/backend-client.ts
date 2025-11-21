@@ -249,7 +249,7 @@ export class BackendClient {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-      const response = await fetch(`${BACKEND_URL}/api/me/entitlement`, {
+      const response = await fetch(`${BACKEND_URL}/api/license/entitlement`, {
         method: 'GET',
         headers: this.getHeaders(),
         signal: controller.signal,

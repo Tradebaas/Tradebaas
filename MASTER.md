@@ -26,6 +26,18 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 >   - Geschatte tijd: 3-4 weken fulltime (6-8 weken part-time)
 >
 >**📅 RECENT UPDATES (21 nov 2025 - LATEST):**
+> - ✅ **FASE 5 COMPLETE: AUTO-RESUME IMPLEMENTATION**
+>   - UserStrategyService.initialize(): Auto-resume ALL users' strategies on server boot
+>   - UserStrategyRepository.findAllStrategiesToResume(): Query across ALL users (agnostic)
+>   - Smart resume logic: Respects autoReconnect flag, validates broker connection
+>   - Status management: active (resumed), paused (user disconnected), error (failed)
+>   - Multi-environment: Testnet + live strategies auto-resume independently
+>   - Comprehensive logging: Emoji indicators, summary stats (resumed/skipped/failed)
+>   - Non-blocking: Server starts even if auto-resume fails
+>   - Database-driven: Uses user_strategies table from FASE 1
+>   - Integration: server.ts calls initialize() during boot (already in place)
+>   - 24/7 Trading: Backend can restart (updates, crashes) and auto-resume ALL strategies
+>   - See: FASE_5_COMPLETION_REPORT.md
 > - ✅ **FASE 4 COMPLETE: FRONTEND INTEGRATION PER-USER STRATEGIES**
 >   - Backend-strategy-client.ts updated: JWT authentication via getAuthHeaders()
 >   - All strategy endpoints: /api/user/strategy/* (was: /api/strategy/*)
@@ -322,9 +334,20 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 > - ✅ Zero breaking changes: Only 1 file modified (~60 lines)
 > - 📄 Report: FASE_4_COMPLETION_REPORT.md
 > 
-> **FASE 5-7 - Auto-Resume, Testing, Deployment:** PENDING
-> - FASE 5: Auto-resume implementation (UserStrategyService.initialize())
-> - FASE 6: Integration testing (multi-user scenarios)
+> **FASE 5 - Auto-Resume Implementation:** ✅ COMPLETE
+> - ✅ UserStrategyService.initialize(): Auto-resume ALL users' strategies on server boot
+> - ✅ UserStrategyRepository.findAllStrategiesToResume(): Query across ALL users
+> - ✅ Smart resume logic: Validates broker connection, respects autoReconnect flag
+> - ✅ Status management: active (resumed), paused (disconnected), error (failed)
+> - ✅ Multi-environment support: Testnet + live auto-resume independently
+> - ✅ Comprehensive logging: Emoji indicators, summary statistics
+> - ✅ Non-blocking: Server starts even if auto-resume fails
+> - ✅ Integration: server.ts calls initialize() during boot
+> - ✅ 24/7 Trading: Backend restarts auto-resume ALL strategies
+> - 📄 Report: FASE_5_COMPLETION_REPORT.md
+> 
+> **FASE 6-7 - Testing & Deployment:** PENDING
+> - FASE 6: Integration testing (multi-user scenarios, concurrent strategies)
 > - FASE 7: Documentation, deployment, production launch
 > 
 > **Existing Authentication Infrastructure:**
@@ -339,10 +362,10 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 > **Next Steps:**
 > - ✅ FASE 3: Trade history per-user isolation (COMPLETE)
 > - ✅ FASE 4: Frontend integration (COMPLETE)
-> - ⏳ FASE 5: Auto-resume implementation (UserStrategyService.initialize())
-> - ⏳ FASE 6: Integration testing (multi-user scenarios, concurrent strategies)
-> - ⏳ FASE 7: Production deployment & documentation
-> - Geschatte tijd: 1 week voor FASE 5-7 (auto-resume + testing + deployment)
+> - ✅ FASE 5: Auto-resume implementation (COMPLETE)
+> - ⏳ FASE 6: Integration testing (multi-user scenarios, concurrent strategies, auto-resume)
+> - ⏳ FASE 7: Production deployment, monitoring, documentation
+> - Geschatte tijd: 2-3 dagen voor FASE 6-7 (testing + deployment prep)
 
 ### 1.1 Hoofdonderdelen
 

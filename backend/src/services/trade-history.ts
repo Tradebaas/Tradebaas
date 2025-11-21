@@ -34,6 +34,7 @@ export class TradeHistoryService {
    * Record a new trade when position is opened
    */
   async recordTrade(params: {
+    userId?: string; // FASE 3: Multi-user support
     strategyName: string;
     instrument: string;
     side: 'buy' | 'sell';
@@ -47,6 +48,7 @@ export class TradeHistoryService {
   }): Promise<string> {
     const trade: TradeRecord = {
       id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId: params.userId, // FASE 3: Store userId
       strategyName: params.strategyName,
       instrument: params.instrument,
       side: params.side,

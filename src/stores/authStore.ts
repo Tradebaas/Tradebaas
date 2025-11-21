@@ -7,6 +7,7 @@ interface User {
   id: string;
   email: string;
   fullName?: string;
+  isAdmin?: boolean;
 }
 
 interface AuthStore {
@@ -18,7 +19,7 @@ interface AuthStore {
 
   // Actions
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  register: (email: string, password: string, fullName?: string, disclaimerAccepted?: boolean) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
   clearError: () => void;
@@ -34,7 +35,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/auth/login`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -67,13 +68,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  register: async (email: string, password: string, fullName?: string) => {
+  register: async (email: string, password: string, fullName?: string, disclaimerAccepted?: boolean) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/auth/register`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName }),
+        body: JSON.stringify({ email, password, fullName, disclaimerAccepted }),
       });
 
       const data = await response.json();
@@ -111,7 +112,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
 
     try {
-      const response = await fetch(`${BACKEND_URL}/auth/me`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

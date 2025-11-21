@@ -53,7 +53,8 @@ export class SqlTradeHistoryStore implements ITradeHistoryStore {
         pnl REAL,
         pnlPercentage REAL,
         status TEXT NOT NULL,
-        metadata TEXT
+        metadata TEXT,
+        user_id TEXT
       );
       
       CREATE INDEX IF NOT EXISTS idx_trades_strategy ON trades(strategyName);
@@ -61,6 +62,8 @@ export class SqlTradeHistoryStore implements ITradeHistoryStore {
       CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);
       CREATE INDEX IF NOT EXISTS idx_trades_entryTime ON trades(entryTime);
       CREATE INDEX IF NOT EXISTS idx_trades_exitReason ON trades(exitReason);
+      CREATE INDEX IF NOT EXISTS idx_trades_user ON trades(user_id);
+      CREATE INDEX IF NOT EXISTS idx_trades_user_strategy_time ON trades(user_id, strategyName, entryTime DESC);
     `);
     
     console.log(`[SqlTradeHistoryStore] Initialized at ${this.dbPath}`);
@@ -71,14 +74,15 @@ export class SqlTradeHistoryStore implements ITradeHistoryStore {
     
     const stmt = this.db.prepare(`
       INSERT INTO trades (
-        id, strategyName, instrument, side, entryOrderId, slOrderId, tpOrderId,
+        id, user_id, strategyName, instrument, side, entryOrderId, slOrderId, tpOrderId,
         entryPrice, exitPrice, amount, stopLoss, takeProfit,
         entryTime, exitTime, exitReason, pnl, pnlPercentage, status, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
       trade.id,
+      trade.userId || null,
       trade.strategyName,
       trade.instrument,
       trade.side,
@@ -171,6 +175,11 @@ export class SqlTradeHistoryStore implements ITradeHistoryStore {
     let sql = 'SELECT * FROM trades WHERE 1=1';
     const params: any[] = [];
     
+    if (query.userId) {
+      sql += ' AND user_id = ?';
+      params.push(query.userId);
+    }
+    
     if (query.strategyName) {
       sql += ' AND strategyName = ?';
       params.push(query.strategyName);
@@ -224,6 +233,11 @@ export class SqlTradeHistoryStore implements ITradeHistoryStore {
     // Build WHERE clause from query
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
+    
+    if (query?.userId) {
+      whereClause += ' AND user_id = ?';
+      params.push(query.userId);
+    }
     
     if (query?.strategyName) {
       whereClause += ' AND strategyName = ?';
@@ -309,6 +323,7 @@ export class SqlTradeHistoryStore implements ITradeHistoryStore {
   private rowToTrade(row: any): TradeRecord {
     return {
       id: row.id,
+      userId: row.user_id || undefined,
       strategyName: row.strategyName,
       instrument: row.instrument,
       side: row.side,

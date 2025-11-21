@@ -4,7 +4,7 @@
   "description": "Backend scaffold for premium trading dashboard (Bitget adapter)",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "vite --host 0.0.0.0 --port 5000",
     "dev:frontend": "vite",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",

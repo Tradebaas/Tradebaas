@@ -508,3 +508,167 @@ export async function handleSyncCurrentPosition(params: {
     };
   }
 }
+
+// ============================================================================
+// PER-USER STRATEGY HANDLERS (NEW - FASE 2)
+// ============================================================================
+
+import { userStrategyService, type UserStartStrategyRequest, type UserStopStrategyRequest } from './user-strategy-service';
+
+export interface UserStrategyStartResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
+export interface UserStrategyStopResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
+/**
+ * Start a strategy for a specific user (per-user isolation)
+ */
+export async function handleUserStartStrategy(request: UserStartStrategyRequest): Promise<UserStrategyStartResponse> {
+  try {
+    const result = await userStrategyService.startStrategy(request);
+    return result;
+  } catch (error) {
+    log.error('Failed to start user strategy', { error, request });
+    return {
+      success: false,
+      message: 'Failed to start strategy',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Stop a strategy for a specific user
+ */
+export async function handleUserStopStrategy(request: UserStopStrategyRequest): Promise<UserStrategyStopResponse> {
+  try {
+    const result = await userStrategyService.stopStrategy(request);
+    return result;
+  } catch (error) {
+    log.error('Failed to stop user strategy', { error, request });
+    return {
+      success: false,
+      message: 'Failed to stop strategy',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Get strategy status for a user
+ */
+export async function handleUserGetStrategyStatus(userId: string, broker?: string, environment?: any) {
+  try {
+    const strategies = await userStrategyService.getStrategyStatus({
+      userId,
+      broker,
+      environment,
+    });
+    
+    return {
+      success: true,
+      strategies,
+    };
+  } catch (error) {
+    log.error('Failed to get user strategy status', { error, userId });
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      strategies: [],
+    };
+  }
+}
+
+// ============================================================================
+// PER-USER TRADE HISTORY HANDLERS (NEW - FASE 3)
+// ============================================================================
+
+/**
+ * Get trade history for a specific user
+ */
+export async function handleUserGetTradeHistory(params: {
+  userId: string;
+  strategyName?: string;
+  instrument?: string;
+  status?: 'open' | 'closed';
+  limit?: number;
+  offset?: number;
+}): Promise<TradeHistoryResponse> {
+  try {
+    const tradeHistory = getTradeHistoryService();
+    const trades = await tradeHistory.queryTrades({
+      userId: params.userId, // FASE 3: Filter by userId
+      strategyName: params.strategyName,
+      instrument: params.instrument,
+      status: params.status,
+      limit: params.limit,
+      offset: params.offset,
+    });
+    
+    return {
+      success: true,
+      trades,
+      total: trades.length
+    };
+  } catch (error) {
+    log.error('Failed to get user trade history', { error, userId: params.userId });
+    return {
+      success: false,
+      trades: [],
+      total: 0,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+/**
+ * Get trade stats for a specific user
+ */
+export async function handleUserGetTradeStats(params: {
+  userId: string;
+  strategyName?: string;
+  instrument?: string;
+  startTime?: number;
+  endTime?: number;
+}): Promise<TradeHistoryStatsResponse> {
+  try {
+    const tradeHistory = getTradeHistoryService();
+    const stats = await tradeHistory.getStats({
+      userId: params.userId, // FASE 3: Filter by userId
+      strategyName: params.strategyName,
+      instrument: params.instrument,
+      startTime: params.startTime,
+      endTime: params.endTime,
+    });
+    
+    return {
+      success: true,
+      stats
+    };
+  } catch (error) {
+    log.error('Failed to get user trade stats', { error, userId: params.userId });
+    return {
+      success: false,
+      stats: {
+        totalTrades: 0,
+        winningTrades: 0,
+        losingTrades: 0,
+        winRate: 0,
+        totalPnl: 0,
+        avgPnl: 0,
+        bestTrade: 0,
+        worstTrade: 0,
+        slHits: 0,
+        tpHits: 0
+      },
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}

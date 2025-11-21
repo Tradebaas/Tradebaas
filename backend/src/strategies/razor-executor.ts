@@ -62,6 +62,7 @@ export class RazorExecutor {
   private config: RazorConfig;
   private strategyId: string;
   private strategyName: string;
+  private userId?: string; // FASE 3: Multi-user support
   
   private analysisState: AnalysisState;
   private priceHistory: number[] = []; // Candle close prices (1m)
@@ -89,19 +90,19 @@ export class RazorExecutor {
   // Stop management helpers
   private beMovedForTrade: boolean = false; // reset per trade
   private lastStopAdjustCheck: number = 0;
-  
+
   constructor(
     client: BackendDeribitClient,
     strategyId: string,
     strategyName: string,
-    config: RazorConfig
+    config: RazorConfig,
+    userId?: string // FASE 3: Optional userId for multi-user support
   ) {
     this.client = client;
     this.strategyId = strategyId;
     this.strategyName = strategyName;
     this.config = config;
-    
-    // Initialize analysis state
+    this.userId = userId; // FASE 3: Store userId    // Initialize analysis state
     this.analysisState = {
       strategyId,
       strategyName,
@@ -337,6 +338,7 @@ export class RazorExecutor {
       
       // Create database record
       this.currentTradeId = await tradeHistory.recordTrade({
+        userId: this.userId, // FASE 3: Multi-user support
         strategyName: this.strategyName,
         instrument: this.config.instrument,
         side: position.size > 0 ? 'buy' : 'sell',
@@ -414,6 +416,7 @@ export class RazorExecutor {
         
         // Record trade in database
         this.currentTradeId = await tradeHistory.recordTrade({
+          userId: this.userId, // FASE 3: Multi-user support
           strategyName: this.strategyName,
           instrument: this.config.instrument,
           side: position.size > 0 ? 'buy' : 'sell',
@@ -1526,6 +1529,7 @@ export class RazorExecutor {
       // TRADE HISTORY: Record this trade
       const tradeHistory = getTradeHistoryService();
       this.currentTradeId = await tradeHistory.recordTrade({
+        userId: this.userId, // FASE 3: Multi-user support
         strategyName: this.strategyName,
         instrument: this.config.instrument,
         side: direction === 'long' ? 'buy' : 'sell',

@@ -10,12 +10,14 @@ export interface User {
   created_at: string;
   last_login: string | null;
   is_active: boolean;
+  is_admin: boolean;
 }
 
 export interface RegisterRequest {
   email: string;
   password: string;
   fullName?: string;
+  disclaimerAccepted?: boolean;
 }
 
 export interface LoginRequest {
@@ -47,15 +49,21 @@ export async function verifyPassword(hash: string, password: string): Promise<bo
 }
 
 export async function registerUser(input: RegisterRequest): Promise<User> {
-  const { email, password, fullName } = input;
+  const { email, password, fullName, disclaimerAccepted } = input;
 
   const passwordHash = await hashPassword(password);
 
+  // Auto-admin for configured email or domain
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
+  const adminDomain = process.env.ADMIN_DOMAIN?.toLowerCase();
+  const emailLower = email.toLowerCase();
+  const isAdmin = emailLower === adminEmail || (adminDomain && emailLower.endsWith(`@${adminDomain}`));
+
   const result = await pool.query<User>(
-    `INSERT INTO users (email, password_hash, full_name)
-     VALUES ($1, $2, $3)
+    `INSERT INTO users (email, password_hash, full_name, is_admin, disclaimer_accepted, disclaimer_accepted_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [email.toLowerCase(), passwordHash, fullName || null]
+    [emailLower, passwordHash, fullName || null, isAdmin, disclaimerAccepted || false, disclaimerAccepted ? new Date() : null]
   );
 
   return result.rows[0];
@@ -88,6 +96,7 @@ export async function loginUser(input: LoginRequest): Promise<{ user: User; toke
     {
       userId: user.id,
       email: user.email,
+      isAdmin: user.is_admin,
     },
     JWT_SECRET,
     { expiresIn: '24h' }

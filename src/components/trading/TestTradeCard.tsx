@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTradingStore } from '@/state/store';
 import { Button } from '@/components/ui/button';
 import { ErrorDetailsDialog, type ErrorLog } from '@/components/dialogs/ErrorDetailsDialog';
-import { X, Warning } from '@phosphor-icons/react';
+import { X } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 interface TestTradeResult {
@@ -13,12 +13,7 @@ interface TestTradeResult {
   timestamp: number;
 }
 
-interface TestTradeCardProps {
-  tradingBlocked?: boolean;
-  onOpenDisclaimer?: () => void;
-}
-
-export function TestTradeCard({ tradingBlocked = false, onOpenDisclaimer }: TestTradeCardProps) {
+export function TestTradeCard() {
   const { connectionState, placeTestMicroOrder, errorLogs } = useTradingStore();
   const [isPlacing, setIsPlacing] = useState(false);
   const [lastTest, setLastTest] = useState<TestTradeResult | null>(null);
@@ -28,11 +23,6 @@ export function TestTradeCard({ tradingBlocked = false, onOpenDisclaimer }: Test
   const isConnected = connectionState === 'Active';
 
   const handlePlaceTestOrder = async () => {
-    if (tradingBlocked) {
-      toast.error('Accepteer eerst de disclaimer om test trades te kunnen plaatsen');
-      return;
-    }
-    
     setIsPlacing(true);
     setLastError(null);
 
@@ -102,28 +92,9 @@ export function TestTradeCard({ tradingBlocked = false, onOpenDisclaimer }: Test
           </p>
         </div>
 
-        {tradingBlocked && (
-          <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 space-y-2">
-            <div className="flex items-start gap-2">
-              <Warning className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" weight="fill" />
-              <p className="text-xs text-destructive">
-                Trade functionaliteit is uitgeschakeld. Accepteer de disclaimer om test orders te kunnen plaatsen.
-              </p>
-            </div>
-            {onOpenDisclaimer && (
-              <button
-                onClick={onOpenDisclaimer}
-                className="w-full text-xs text-accent hover:text-accent/80 underline underline-offset-2 font-medium transition-colors text-center py-1"
-              >
-                Open disclaimer
-              </button>
-            )}
-          </div>
-        )}
-
         <Button
           onClick={handlePlaceTestOrder}
-          disabled={tradingBlocked || !isConnected || isPlacing}
+          disabled={!isConnected || isPlacing}
           className="w-full h-11 bg-accent hover:bg-accent/90 text-accent-foreground font-medium rounded-lg"
         >
           {isPlacing ? 'Order plaatsen...' : 'Test Order Plaatsen'}
