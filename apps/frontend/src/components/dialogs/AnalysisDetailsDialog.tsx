@@ -4,7 +4,6 @@ import { useTradingStore } from '@/state/store';
 import { useBackendStrategyStatus } from '@/hooks/use-backend-strategy-status';
 import { useBackendAnalysis } from '@/hooks/use-backend-analysis';
 import { Check, X, Clock, TrendUp, TrendDown, Minus, ArrowUp, ArrowDown } from '@phosphor-icons/react';
-import type { VortexConfig } from '@/lib/strategies/vortexStrategy';
 
 interface PositionInfo {
   instrument: string;

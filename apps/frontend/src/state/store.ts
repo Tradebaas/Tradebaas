@@ -6,7 +6,7 @@ import type { ErrorLog } from '@/components/dialogs/ErrorDetailsDialog';
 import { calculatePosition, buildBracket, type RiskMode, type RiskEngineInput } from '@/lib/riskEngine';
 import { ScalpingStrategy, DEFAULT_SCALPING_CONFIG, type ActivePosition } from '@/lib/strategies/scalpingStrategy';
 import { FastTestStrategy, DEFAULT_FAST_TEST_CONFIG } from '@/lib/strategies/fastTestStrategy';
-import { VortexStrategy, DEFAULT_VORTEX_CONFIG } from '@/lib/strategies/vortexStrategy';
+// VortexStrategy removed - legacy code
 import { RazorStrategy, DEFAULT_RAZOR_CONFIG } from '@/lib/strategies/razorStrategy';
 import { backendClient } from '@/lib/backend-client';
 import { backendStrategyClient } from '@/lib/backend-strategy-client';
@@ -88,7 +88,7 @@ interface TradingStore {
   strategyErrorLogs: ErrorLog[];
   riskSettings: RiskSettings;
   
-  strategy: ScalpingStrategy | FastTestStrategy | VortexStrategy | RazorStrategy | null;
+  strategy: ScalpingStrategy | FastTestStrategy | RazorStrategy | null;
   strategyStatus: StrategyStatus;
   activePosition: ActivePosition | null;
   selectedStrategy: string;
@@ -118,7 +118,7 @@ interface TradingStore {
   setSelectedStrategy: (strategyId: string) => void;
   checkForOpenPosition: () => Promise<void>;
   closePosition: () => Promise<void>;
-  getAnalysisState: () => ReturnType<ScalpingStrategy['getAnalysisState'] | FastTestStrategy['getAnalysisState'] | VortexStrategy['getAnalysisState'] | RazorStrategy['getAnalysisState']> | null;
+  getAnalysisState: () => ReturnType<ScalpingStrategy['getAnalysisState'] | FastTestStrategy['getAnalysisState'] | RazorStrategy['getAnalysisState']> | null;
   startPositionMonitor: () => void;
   stopPositionMonitor: () => void;
   startRealTimeConnectionPolling: () => void;

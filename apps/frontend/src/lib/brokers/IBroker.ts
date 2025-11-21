@@ -1,5 +1,5 @@
 export type BrokerEnvironment = 'live' | 'testnet';
-export type ConnectionState = 'Stopped' | 'Connecting' | 'Active' | 'Error';
+export type ConnectionState = 'Stopped' | 'Connecting' | 'Analyzing' | 'Active' | 'Error';
 
 export interface BrokerCredentials {
   apiKey: string;

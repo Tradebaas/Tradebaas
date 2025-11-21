@@ -1,7 +1,12 @@
 import { Button } from "./components/ui/button";
 import { Warning, ArrowsClockwise } from "@phosphor-icons/react";
 
-export const ErrorFallback = ({ error, resetErrorBoundary }) => {
+interface ErrorFallbackProps {
+  error: Error;
+  resetErrorBoundary: () => void;
+}
+
+export const ErrorFallback = ({ error, resetErrorBoundary }: ErrorFallbackProps) => {
   if (import.meta.env.DEV) throw error;
 
   const is429 = error?.message?.includes('429') || error?.message?.includes('rate limit');
