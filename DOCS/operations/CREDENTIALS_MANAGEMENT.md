@@ -156,12 +156,12 @@ Credentials worden gegroepeerd per broker met comments:
 
 ```properties
 # Deribit API Credentials
-DERIBIT_API_KEY=xxx
-DERIBIT_API_SECRET=yyy
+DERIBIT_API_KEY=your_api_key_here
+DERIBIT_API_SECRET=your_api_secret_here
 
 # Binance API Credentials
-BINANCE_API_KEY=xxx
-BINANCE_API_SECRET=yyy
+BINANCE_API_KEY=your_api_key_here
+BINANCE_API_SECRET=your_api_secret_here
 ```
 
 ### Save Logic

@@ -90,8 +90,8 @@ cd /root/Tradebaas
 VITE_API_URL=http://YOUR_SERVER_IP:3000
 
 # Deribit API Credentials
-DERIBIT_API_KEY=REDACTED_API_KEY
-DERIBIT_API_SECRET=REDACTED_API_SECRET
+DERIBIT_API_KEY=your_api_key_here
+DERIBIT_API_SECRET=your_api_secret_here
 ```
 
 ---
