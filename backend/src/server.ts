@@ -34,11 +34,9 @@ const HOST = process.env.HOST || '0.0.0.0'; // Changed from 127.0.0.1 to allow e
 // CORS whitelist configuration (SEC-003)
 const FRONTEND_URLS = (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:5174,http://localhost:5000').split(',');
 const PRODUCTION_URLS = ['https://app.tradebazen.nl', 'https://www.tradebazen.nl'];
-// Add current server IP for development
-const DEV_URLS = ['http://217.154.69.143:5000', 'http://217.154.69.143:5173', 'http://217.154.69.143:5174'];
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production' 
   ? PRODUCTION_URLS 
-  : [...FRONTEND_URLS, ...PRODUCTION_URLS, ...DEV_URLS];
+  : [...FRONTEND_URLS, ...PRODUCTION_URLS];
 
 const server = Fastify({
   logger: {
