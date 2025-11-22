@@ -26,7 +26,10 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 >   - Geschatte tijd: 3-4 weken fulltime (6-8 weken part-time)
 >
 >**📅 RECENT UPDATES (22 nov 2025 - LATEST):**
-> - ✅ **CONNECTION STATUS DIALOG FIX:** JWT tokens toegevoegd aan ConnectionStatusDialog polling
+> - ✅ **STRATEGY STOP FIX:** Stoppen van strategieën werkt nu correct voor per-user UUIDs
+>   - BackendStrategyClient.stopStrategy() detecteert UUID format en zoekt strategie op
+>   - Store.stopStrategy() gebruikt juiste response format van getStrategyStatus()
+>   - Alle strategieën kunnen nu correct worden gestopt via UI
 >   - Dialog toont nu juiste omgeving en authenticatie status in plaats van "no token provided"
 > - ✅ **ANALYSIS ENDPOINT FIX:** Nieuwe `/api/user/strategy/analysis/{strategyId}` endpoint voor per-user strategieën
 >   - Frontend detecteert automatisch UUID format en gebruikt juiste endpoint

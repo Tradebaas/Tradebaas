@@ -617,12 +617,17 @@ server.get('/api/connection/status', async (request, reply) => {
   try {
     // Check for authenticated user first
     let userConnectionStatus = null;
+    let userStrategiesActive = 0;
     try {
       await (authenticateRequest as any)(request, reply);
       if ((reply as any).sent || (reply.raw && (reply.raw as any).writableEnded)) return;
       const userId = request.user?.userId;
       if (userId) {
         userConnectionStatus = userBrokerRegistry.getAnyConnectionStatus(userId, 'deribit');
+        
+        // Count active per-user strategies for this user
+        const userStrategies = await userStrategyService.getStrategyStatus({ userId });
+        userStrategiesActive = userStrategies.filter(s => s.status === 'active').length;
       }
     } catch (err) {
       // Ignore auth errors, fall back to global status
@@ -646,7 +651,7 @@ server.get('/api/connection/status', async (request, reply) => {
         lastPing: Date.now(),
       },
       health: {
-        strategies: healthMetrics.strategiesActive,
+        strategies: userStrategiesActive || healthMetrics.strategiesActive,
         errors: healthMetrics.errors24h || 0,
       },
       timestamp: Date.now()

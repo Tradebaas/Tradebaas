@@ -779,11 +779,13 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
       
       // Get the currently running strategy from backend to stop it
       backendStrategyClient.getStrategyStatus().then(async (statusResponse) => {
-        if (statusResponse.success && statusResponse.strategies.length > 0) {
+        if (statusResponse.success && statusResponse.strategies && statusResponse.strategies.length > 0) {
           for (const backendStrategy of statusResponse.strategies) {
             console.log('[Store] Stopping backend strategy:', backendStrategy.id);
             await backendStrategyClient.stopStrategy({ strategyId: backendStrategy.id });
           }
+        } else {
+          console.log('[Store] No backend strategies found to stop');
         }
       }).catch((err) => {
         console.warn('[Store] Could not stop backend strategy:', err);
