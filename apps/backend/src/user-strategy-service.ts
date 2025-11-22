@@ -210,7 +210,7 @@ export class UserStrategyService {
   /**
    * Start a strategy for a specific user
    */
-  async startStrategy(request: UserStartStrategyRequest): Promise<{ success: boolean; message: string }> {
+  async startStrategy(request: UserStartStrategyRequest): Promise<{ success: boolean; message: string; strategyId?: string }> {
     const {
       userId,
       strategyName,
@@ -265,7 +265,7 @@ export class UserStrategyService {
       }
 
       // Save strategy to database
-      await userStrategyRepository.save({
+      const savedStrategy = await userStrategyRepository.save({
         userId,
         strategyName,
         instrument,
@@ -303,6 +303,7 @@ export class UserStrategyService {
       return {
         success: true,
         message: `Strategy ${strategyName} started successfully for ${instrument}`,
+        strategyId: savedStrategy.id, // Return the database ID
       };
     } catch (error: any) {
       console.error(`[UserStrategyService] ❌ Failed to start strategy: ${strategyKey}`, error);
@@ -502,9 +503,53 @@ export class UserStrategyService {
 
     console.log(`[UserStrategyService] Starting execution loop: ${strategyKey}`);
 
-    // TODO: Implement actual execution loop
-    // This will call executor.analyze() periodically and handle position management
-    // For now, this is a placeholder
+    try {
+      // Initialize executor (loads history + checks for orphan trades)
+      console.log(`[UserStrategyService] Initializing executor for ${strategyKey}...`);
+      await executor.initialize();
+      console.log(`[UserStrategyService] ✅ Executor initialized for ${strategyKey}`);
+
+      // Get user's broker client for ticker subscription
+      const client = userBrokerRegistry.getClient(userId, broker, environment);
+      if (!client || !client.isConnected()) {
+        console.error(`[UserStrategyService] Client not connected for ${strategyKey}`);
+        return;
+      }
+
+      // Subscribe to ticker updates and pass to executor
+      console.log(`[UserStrategyService] Subscribing to ${instrument} ticker for ${strategyKey}...`);
+      await client.subscribeTicker(instrument, async (ticker) => {
+        try {
+          await executor.onTicker(ticker.last_price);
+
+          // Update analysis state in database if executor supports it
+          if (typeof executor.getAnalysisState === 'function') {
+            const analysisState = executor.getAnalysisState();
+            // TODO: Store analysis state in user strategy record
+          }
+
+          // If position is open, update metrics if executor supports it
+          if (executor instanceof RazorExecutor && typeof executor.getPositionMetrics === 'function') {
+            const metrics = await executor.getPositionMetrics();
+            // TODO: Store metrics in user strategy record
+          }
+        } catch (error) {
+          console.error(`[UserStrategyService] Error processing ticker for ${strategyKey}:`, error);
+        }
+      });
+
+      console.log(`[UserStrategyService] ✅ Ticker subscription active for ${strategyKey}`);
+
+    } catch (error) {
+      console.error(`[UserStrategyService] Failed to start execution loop for ${strategyKey}:`, error);
+      // Mark strategy as error in database
+      await userStrategyRepository.updateStatus(userId, strategyName, instrument, {
+        status: 'error',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorCount: 1,
+      }, broker, environment);
+      return;
+    }
 
     // Update heartbeat every 30 seconds
     instance.intervalId = setInterval(async () => {

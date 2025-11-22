@@ -1,60 +1,32 @@
 /**
  * Spark KV API Polyfill for Self-Hosted Deployment
  * 
- * This polyfill replaces the GitHub Spark KV API with calls to our backend KV storage.
- * All KV operations now go through the backend API on port 3000 for robustness and scalability.
+ * This polyfill replaces the GitHub Spark KV API with localStorage.
+ * All KV operations now use localStorage for simplicity.
  * 
  * Architecture:
- * - Frontend: Uses this polyfill to mimic Spark KV API
- * - Backend: /api/kv/* endpoints handle storage (in-memory, upgradeable to Redis/PostgreSQL)
- * - No dependency on port 7001 or Vite dev server
- * - Rate limit proof - backend handles all throttling
+ * - Frontend: Uses localStorage with spark-kv: prefix
+ * - No backend dependency for KV
+ * - Simple and robust
  */
-
-import { getBackendUrl } from './backend-url';
-
-const KV_API_BASE = `${getBackendUrl()}/api/kv`;
 
 class SparkKVPolyfill implements SparkKV {
   async get<T>(key: string): Promise<T | undefined> {
     try {
-      const response = await fetch(`${KV_API_BASE}/${encodeURIComponent(key)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      // 404 means key not found - return undefined
-      if (response.status === 404) {
+      const value = localStorage.getItem(`spark-kv:${key}`);
+      if (value === null) {
         return undefined;
       }
-
-      if (!response.ok) {
-        throw new Error(`KV GET failed: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.value === null ? undefined : (data.value as T);
+      return JSON.parse(value) as T;
     } catch (error) {
       console.error(`[SparkKV] Failed to get key "${key}":`, error);
-      throw error;
+      return undefined;
     }
   }
 
   async set(key: string, value: unknown): Promise<void> {
     try {
-      const response = await fetch(`${KV_API_BASE}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ key, value }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`KV SET failed: ${response.status} ${response.statusText}`);
-      }
+      localStorage.setItem(`spark-kv:${key}`, JSON.stringify(value));
     } catch (error) {
       console.error(`[SparkKV] Failed to set key "${key}":`, error);
       throw error;
@@ -63,16 +35,7 @@ class SparkKVPolyfill implements SparkKV {
 
   async delete(key: string): Promise<void> {
     try {
-      const response = await fetch(`${KV_API_BASE}/${encodeURIComponent(key)}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`KV DELETE failed: ${response.status} ${response.statusText}`);
-      }
+      localStorage.removeItem(`spark-kv:${key}`);
     } catch (error) {
       console.error(`[SparkKV] Failed to delete key "${key}":`, error);
       throw error;
@@ -80,9 +43,14 @@ class SparkKVPolyfill implements SparkKV {
   }
 
   async keys(prefix?: string): Promise<string[]> {
-    // Note: Not implemented yet - can be added to backend if needed
-    console.warn('[SparkKV] keys() not implemented in backend yet');
-    return [];
+    try {
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('spark-kv:'));
+      const filtered = prefix ? keys.filter(key => key.startsWith(`spark-kv:${prefix}`)) : keys;
+      return filtered.map(key => key.replace('spark-kv:', ''));
+    } catch (error) {
+      console.error(`[SparkKV] Failed to get keys:`, error);
+      return [];
+    }
   }
 }
 

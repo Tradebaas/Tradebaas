@@ -32,8 +32,11 @@ export class UserCredentialsService {
     const { userId, broker, environment, apiKey, apiSecret } = input;
 
     // Encrypt API key and secret separately
-    const encryptedKey = encryptData(apiKey, userId);
-    const encryptedSecret = encryptData(apiSecret, userId);
+  // Generate a single salt/iv and reuse for both fields to ensure consistent derivation
+  const salt = undefined; // let encryptData generate a salt unless we want deterministic
+  const iv = undefined;
+  const encryptedKey = encryptData(apiKey, userId, { salt, iv });
+  const encryptedSecret = encryptData(apiSecret, userId, { salt: encryptedKey.salt, iv: encryptedKey.iv });
 
     // Upsert credentials (insert or update if exists)
     await pool.query(
@@ -113,8 +116,27 @@ export class UserCredentialsService {
 
       return { apiKey, apiSecret };
     } catch (error) {
-      console.error('[UserCredentialsService] Decryption failed:', error);
-      throw new Error('Failed to decrypt credentials');
+        console.error('[UserCredentialsService] Decryption failed:', error);
+        try {
+          const fs = require('fs');
+    const fingerprint = (row.api_key_encrypted || '').slice(0,8);
+    const logLine = `[${new Date().toISOString()}] DECRYPTION_FAILED userId=${userId} broker=${broker} environment=${environment} fingerprint=${fingerprint} error=${error instanceof Error?error.message:String(error)}\n`;
+          fs.appendFileSync('/root/Tradebaas-1/apps/backend/logs/debug-decrypt.log', logLine);
+        } catch (e) {
+          // ignore logging failures
+        }
+        // Deactivate this credential row to avoid future attempts
+        try {
+          await pool.query(
+            `UPDATE user_credentials SET is_active = false WHERE user_id = $1 AND broker = $2 AND environment = $3`,
+            [userId, broker, environment]
+          );
+        } catch (e) {
+          // ignore update errors
+        }
+
+        // Signal a specific error so frontend can prompt re-entry
+        throw new Error('Credentials corrupted or encryption mismatch - please re-enter credentials.');
     }
   }
 

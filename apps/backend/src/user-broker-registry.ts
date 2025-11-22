@@ -73,6 +73,42 @@ class UserBrokerRegistry {
     return this.clients.get(`${userId}:${broker}:${environment}`) || null;
   }
 
+  /**
+   * Get any client for user across environments (prefer live)
+   */
+  getAnyClient(userId: string, broker: string = 'deribit') {
+    const order: ('live' | 'testnet')[] = ['live', 'testnet'];
+    for (const env of order) {
+      const c = this.getClient(userId, broker, env);
+      if (c) return { client: c, environment: env as 'live' | 'testnet' };
+    }
+    return { client: null, environment: null } as { client: BackendDeribitClient | null; environment: 'live' | 'testnet' | null };
+  }
+
+  /**
+   * Get connection status for user across environments (prefer live)
+   */
+  getAnyConnectionStatus(userId: string, broker: string = 'deribit') {
+    const order: ('live' | 'testnet')[] = ['live', 'testnet'];
+    for (const env of order) {
+      const client = this.getClient(userId, broker, env);
+      if (client) {
+        return {
+          connected: client.isConnected(),
+          broker,
+          environment: env,
+          manuallyDisconnected: false,
+        };
+      }
+    }
+    return {
+      connected: false,
+      broker,
+      environment: null,
+      manuallyDisconnected: false,
+    } as any;
+  }
+
   getConnectionStatus(userId: string, broker: string = 'deribit', environment: 'testnet' | 'live' = 'testnet') {
     const client = this.getClient(userId, broker, environment);
     return {

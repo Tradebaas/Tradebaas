@@ -33,29 +33,33 @@ export function deriveUserKey(userId: string, salt: string): Buffer {
  * Encrypt data using AES-256-GCM
  * Returns encrypted data, IV, and salt
  */
-export function encryptData(plaintext: string, userId: string): EncryptedData {
-  // Generate random salt and IV
-  const salt = crypto.randomBytes(32).toString('hex');
-  const iv = crypto.randomBytes(16); // 16 bytes for GCM
-  
+export function encryptData(
+  plaintext: string,
+  userId: string,
+  opts?: { salt?: string; iv?: string }
+): EncryptedData {
+  // Use provided salt/iv when present, otherwise generate
+  const salt = opts?.salt || crypto.randomBytes(32).toString('hex');
+  const ivBuf = opts?.iv ? Buffer.from(opts.iv, 'hex') : crypto.randomBytes(16);
+
   // Derive user-specific key
   const key = deriveUserKey(userId, salt);
-  
+
   // Encrypt using AES-256-GCM
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, ivBuf);
+
   let encrypted = cipher.update(plaintext, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  
+
   // Get auth tag for GCM (provides authentication)
   const authTag = cipher.getAuthTag().toString('hex');
-  
+
   // Combine encrypted data and auth tag
   const encryptedWithTag = encrypted + ':' + authTag;
-  
+
   return {
     encrypted: encryptedWithTag,
-    iv: iv.toString('hex'),
+    iv: ivBuf.toString('hex'),
     salt,
   };
 }

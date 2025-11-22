@@ -36,8 +36,14 @@ import { userBrokerRegistry } from './user-broker-registry';
 import { pool } from './db';
 import { hashPassword } from './services/auth-service';
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-const HOST = process.env.HOST || '0.0.0.0'; // Changed from 127.0.0.1 to allow external access
+// Prefer explicit PORT, fallback to BACKEND_PORT (used by PM2 ecosystem) or default 3000
+const PORT = process.env.PORT
+  ? parseInt(process.env.PORT)
+  : process.env.BACKEND_PORT
+  ? parseInt(process.env.BACKEND_PORT)
+  : 3000;
+// Default HOST to 127.0.0.1 for predictable internal routing (Nginx -> backend)
+const HOST = process.env.HOST || '127.0.0.1';
 
 // CORS whitelist configuration (SEC-003)
 const FRONTEND_URLS = (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:5174,http://localhost:5000').split(',');
@@ -409,6 +415,120 @@ server.get('/api/user/credentials', { preHandler: authenticateRequest }, async (
   }
 });
 
+// Get decrypted credentials for user, broker, environment
+server.get('/api/user/credentials/decrypted', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const userId = request.user!.userId;
+    const { broker, environment } = request.query as { broker?: string; environment?: string };
+    if (!broker || !environment) {
+      return reply.code(400).send({
+        success: false,
+        error: 'Missing query parameters: broker, environment',
+      });
+    }
+    let creds;
+    try {
+      creds = await userCredentialsService.loadCredentials(userId, broker, environment);
+    } catch (err) {
+      request.log.error({ err, userId, broker, environment }, 'DECRYPT_CREDENTIALS_ERROR');
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (!creds) {
+      return reply.code(404).send({
+        success: false,
+        error: 'No credentials found',
+      });
+    }
+    return reply.send({
+      success: true,
+      credentials: creds,
+    });
+  } catch (error: any) {
+    request.log.error({ err: error }, 'Failed to get decrypted credentials');
+    return reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to get decrypted credentials',
+    });
+  }
+});
+
+// TEMP: Debug endpoint om decryptie te testen
+server.get('/api/debug/decrypt-test', async (request, reply) => {
+  try {
+    // Dummy encrypted values (pas aan indien nodig)
+    const encrypted = request.query.encrypted as string;
+    const iv = request.query.iv as string;
+    const salt = request.query.salt as string;
+    const userId = request.query.userId as string || 'debug-user';
+    const fs = require('fs');
+    const logLine = `[${new Date().toISOString()}] DEBUG_DECRYPT_TEST_REQUEST: encrypted=${encrypted}, iv=${iv}, salt=${salt}, userId=${userId}\n`;
+    fs.appendFileSync('/root/Tradebaas-1/apps/backend/logs/debug-decrypt.log', logLine);
+    console.log(logLine);
+    if (!encrypted || !iv || !salt || !userId) {
+      const missingLine = `[${new Date().toISOString()}] DEBUG_DECRYPT_TEST_MISSING_PARAMS: encrypted=${encrypted}, iv=${iv}, salt=${salt}, userId=${userId}\n`;
+      fs.appendFileSync('/root/Tradebaas-1/apps/backend/logs/debug-decrypt.log', missingLine);
+      console.log(missingLine);
+      request.log.info({ encrypted, iv, salt, userId }, 'DEBUG_DECRYPT_TEST_MISSING_PARAMS');
+      return reply.code(400).send({ error: 'Missing query params: encrypted, iv, salt, userId' });
+    }
+    // Importeer decrypt functie
+    const { decryptData } = require('./services/encryption-service');
+    let result;
+    try {
+      result = decryptData(encrypted, iv, salt, userId);
+    } catch (err) {
+      console.log('DEBUG_DECRYPT_TEST_ERROR', { error: err.message, encrypted, iv, salt, userId });
+      request.log.error({ error: err.message, encrypted, iv, salt, userId }, 'DEBUG_DECRYPT_TEST_ERROR');
+      return reply.code(500).send({ error: err.message });
+    }
+    return reply.send({ decrypted: result });
+  } catch (error: any) {
+    // If decryption failed due to corrupted credentials, return a clear client error so frontend can prompt re-entry
+    const msg = error?.message || String(error || 'Unknown error');
+    if (msg.includes('Credentials corrupted') || msg.includes('encryption mismatch')) {
+      return reply.code(422).send({ error: msg, code: 'CREDENTIALS_CORRUPT' });
+    }
+    return reply.code(500).send({ error: msg });
+  }
+});
+
+// Admin: run or return the credentials scan report (requires admin)
+server.get('/api/admin/credentials-scan', { preHandler: requireAdmin }, async (request, reply) => {
+  const fs = require('fs');
+  const path = '/root/Tradebaas-1/apps/backend/logs/credentials-scan.json';
+
+  // If no report exists, run the scan script synchronously (short timeout)
+  if (!fs.existsSync(path)) {
+    const cp = require('child_process');
+    try {
+      const res = cp.spawnSync('node', ['scripts/scan_credentials.js'], {
+        cwd: '/root/Tradebaas-1/apps/backend',
+        env: process.env,
+        encoding: 'utf8',
+        timeout: 60 * 1000,
+      });
+      if (res.error) {
+        return reply.code(500).send({ error: 'Failed to start scan', details: String(res.error) });
+      }
+      if (res.status !== 0) {
+        return reply.code(500).send({ error: 'Scan script failed', stdout: res.stdout, stderr: res.stderr });
+      }
+    } catch (e: any) {
+      return reply.code(500).send({ error: 'Scan execution error', details: e.message || String(e) });
+    }
+  }
+
+  try {
+    const content = fs.readFileSync(path, 'utf8');
+    return reply.type('application/json').send(JSON.parse(content));
+  } catch (e: any) {
+    return reply.code(500).send({ error: 'Failed to read scan report', details: e.message || String(e) });
+  }
+});
+
 // Delete credentials
 server.delete('/api/user/credentials', { preHandler: authenticateRequest }, async (request, reply) => {
   try {
@@ -495,29 +615,21 @@ server.get('/ready', async (request, reply) => {
 // GET /api/connection/status - Real-time connection status
 server.get('/api/connection/status', async (request, reply) => {
   try {
-    // If authenticated, return per-user connection status
-    let userId: string | null = null;
+    // Check for authenticated user first
+    let userConnectionStatus = null;
     try {
-      // Fast path: check Authorization header and validate JWT (reuse middleware)
-      // We don't want to throw if unauthenticated, so wrap in try/catch
-      const authHeader = (request.headers.authorization || '') as string;
-      if (authHeader.startsWith('Bearer ')) {
-        // Call authenticateRequest manually to populate request.user
-        await (authenticateRequest as any)(request, reply);
-        userId = request.user?.userId || null;
+      await (authenticateRequest as any)(request, reply);
+      if ((reply as any).sent || (reply.raw && (reply.raw as any).writableEnded)) return;
+      const userId = request.user?.userId;
+      if (userId) {
+        userConnectionStatus = userBrokerRegistry.getAnyConnectionStatus(userId, 'deribit');
       }
     } catch (err) {
-      // ignore auth errors and fall back to global status
+      // Ignore auth errors, fall back to global status
     }
 
-    if (userId) {
-      // For now, only deribit supported
-      const perUserStatus = userBrokerRegistry.getConnectionStatus(userId, 'deribit', 'testnet');
-      return reply.send({ success: true, perUser: perUserStatus, timestamp: Date.now() });
-    }
-
-    // Fallback: global strategy service status
-    const connectionStatus = strategyService.getConnectionStatus();
+    // Use per-user status if available, otherwise global status
+    const connectionStatus = userConnectionStatus || strategyService.getConnectionStatus();
     const healthMetrics = strategyService.getHealthMetrics();
 
     // Get detailed WebSocket status
@@ -930,31 +1042,38 @@ server.get('/api/v2/balance', async (request, reply) => {
   try {
     // Prefer per-user client when authenticated
     let client = null as any;
-    try {
-      const authHeader = (request.headers.authorization || '') as string;
-      if (authHeader.startsWith('Bearer ')) {
+      try {
         await (authenticateRequest as any)(request, reply);
+  if ((reply as any).sent || (reply.raw && (reply.raw as any).writableEnded)) return; 
         const userId = request.user?.userId;
-        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+        if (userId) client = userBrokerRegistry.getAnyClient(userId, 'deribit').client;
+      } catch (err) {
+        // ignore auth errors
       }
-    } catch (err) {
-      // ignore
-    }
 
     if (!client) client = strategyService.getClient();
 
     if (!client || !client.isConnected()) {
-      return reply.code(400).send({ success: false, error: 'Not connected to broker' });
-    }
-
-    const balance = await strategyService.getBalance('USDC');
-    
-    if (!balance) {
-      return reply.code(500).send({
-        success: false,
-        error: 'Failed to fetch balance from broker',
+      // Return 0 balance instead of error when not connected
+      return reply.send({
+        success: true,
+        balance: {
+          currency: 'USDC',
+          available: 0,
+          total: 0,
+          locked: 0,
+        },
       });
     }
+
+    // Use the client directly instead of strategyService.getBalance
+    const summary = await client.getAccountSummary('USDC');
+    const balance = {
+      currency: 'USDC',
+      available: summary.available_funds,
+      total: summary.equity,
+      locked: summary.equity - summary.available_funds,
+    };
     
     console.log('[API] Balance fetched:', balance);
     
@@ -975,14 +1094,12 @@ server.get('/api/v2/balance', async (request, reply) => {
 server.get('/api/v2/positions', async (request, reply) => {
   try {
     let client = null as any;
-    try {
-      const authHeader = (request.headers.authorization || '') as string;
-      if (authHeader.startsWith('Bearer ')) {
+      try {
         await (authenticateRequest as any)(request, reply);
+  if ((reply as any).sent || (reply.raw && (reply.raw as any).writableEnded)) return;
         const userId = request.user?.userId;
-        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
-      }
-    } catch (err) {}
+        if (userId) client = userBrokerRegistry.getAnyClient(userId, 'deribit').client;
+      } catch (err) {}
 
     if (!client) client = strategyService.getClient();
 
@@ -1008,14 +1125,12 @@ server.get('/api/v2/orders/:instrument', async (request, reply) => {
   try {
     const { instrument } = request.params as { instrument: string };
     let client = null as any;
-    try {
-      const authHeader = (request.headers.authorization || '') as string;
-      if (authHeader.startsWith('Bearer ')) {
+      try {
         await (authenticateRequest as any)(request, reply);
+  if ((reply as any).sent || (reply.raw && (reply.raw as any).writableEnded)) return;
         const userId = request.user?.userId;
-        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
-      }
-    } catch (err) {}
+        if (userId) client = userBrokerRegistry.getAnyClient(userId, 'deribit').client;
+      } catch (err) {}
 
     if (!client) client = strategyService.getClient();
     if (!client || !client.isConnected()) return reply.code(400).send({ success: false, error: 'Not connected to broker' });
@@ -1045,7 +1160,7 @@ server.get('/api/v2/ticker/:instrument', async (request, reply) => {
       if (authHeader.startsWith('Bearer ')) {
         await (authenticateRequest as any)(request, reply);
         const userId = request.user?.userId;
-        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+  if (userId) client = userBrokerRegistry.getAnyClient(userId, 'deribit').client;
       }
     } catch (err) {}
 
@@ -1084,7 +1199,7 @@ server.post('/api/v2/test-order', async (request, reply) => {
       if (authHeader.startsWith('Bearer ')) {
         await (authenticateRequest as any)(request, reply);
         const userId = request.user?.userId;
-        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+  if (userId) client = userBrokerRegistry.getAnyClient(userId, 'deribit').client;
       }
     } catch (err) {}
 
@@ -1128,7 +1243,7 @@ server.post<{ Body: { instrument: string } }>('/api/v2/positions/close', async (
       if (authHeader.startsWith('Bearer ')) {
         await (authenticateRequest as any)(request, reply);
         const userId = request.user?.userId;
-        if (userId) client = userBrokerRegistry.getClient(userId, 'deribit', 'testnet');
+  if (userId) client = userBrokerRegistry.getAnyClient(userId, 'deribit').client;
       }
     } catch (err) {}
 
@@ -1846,8 +1961,8 @@ const start = async () => {
     }
     
     console.log(`[START] Starting server on ${HOST}:${PORT}...`);
-    // CRITICAL: Use '0.0.0.0' explicitly to bind to all interfaces
-    await server.listen({ port: PORT, host: '0.0.0.0' });
+  // Bind to configured HOST so Nginx (127.0.0.1) reliably reaches the backend
+  await server.listen({ port: PORT, host: HOST });
     console.log('[START] Server.listen() completed');
     log.info('Tradebaas Backend server started', { 
       host: HOST, 

@@ -29,7 +29,7 @@ export class StrategyService {
   private client: BackendDeribitClient | null = null;
   private runningStrategies = new Map<string, NodeJS.Timeout>();
   private strategyExecutors = new Map<string, RazorExecutor | ThorExecutor>();
-  private environment: DeribitEnvironment = 'testnet';
+  private environment: DeribitEnvironment = 'live';
 
   constructor() {}
 

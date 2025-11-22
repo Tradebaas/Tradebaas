@@ -118,7 +118,7 @@ class BackendStrategyClient {
       
       return {
         success: data.success || false,
-        strategyId: data.strategyId || '',
+        strategyId: data.strategyId || data.id || '', // Try different possible ID fields
         message: data.message || '',
       };
     } catch (error) {
@@ -180,35 +180,45 @@ class BackendStrategyClient {
    */
   async getStrategyStatus(strategyId?: string): Promise<BackendStrategyStatusResponse> {
     try {
-      // FASE 4: Use per-user endpoint with JWT authentication
-      const url = `${this.baseUrl}/api/user/strategy/status?broker=deribit&environment=testnet`;
-      
-      const response = await fetch(url, {
+      // Get connection status first
+      const connectionUrl = `${this.baseUrl}/api/connection/status`;
+      const connectionResponse = await fetch(connectionUrl, {
         signal: AbortSignal.timeout(5000), // 5 second timeout
         headers: this.getAuthHeaders(),
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+
+      let connectionData = { connected: false, environment: 'testnet' };
+      if (connectionResponse.ok) {
+        const connData = await connectionResponse.json();
+        connectionData = {
+          connected: !!connData.connected || false,
+          environment: connData.environment || 'testnet',
+        };
       }
-      
-      const text = await response.text();
-      
-      // Check if response is empty or invalid
-      if (!text || text.trim() === '') {
-        throw new Error('Empty response from backend');
+
+      // Get strategy status separately
+      const strategyUrl = `${this.baseUrl}/api/user/strategy/status`;
+      const strategyResponse = await fetch(strategyUrl, {
+        signal: AbortSignal.timeout(5000),
+        headers: this.getAuthHeaders(),
+      });
+
+      let strategies: any[] = [];
+      if (strategyResponse.ok) {
+        const stratData = await strategyResponse.json();
+        strategies = (stratData.strategies || []).map((strat: any) => ({
+          id: strat.id, // Use the database ID as strategyId
+          name: strat.strategyName,
+          status: strat.status === 'active' ? 'active' : 'stopped',
+          startedAt: strat.connectedAt ? new Date(strat.connectedAt).getTime() : Date.now(),
+          config: strat.config || {},
+        }));
       }
-      
-      const data = JSON.parse(text);
-      
-      // FASE 4: Convert per-user response format to expected format
+
       return {
-        success: data.success || false,
-        strategies: data.strategies || [],
-        connection: {
-          connected: data.strategies?.length > 0 || false,
-          environment: 'testnet',
-        },
+        success: true,
+        strategies,
+        connection: connectionData,
       };
     } catch (error) {
       // Only log if it's not a timeout or network issue (those are expected occasionally)

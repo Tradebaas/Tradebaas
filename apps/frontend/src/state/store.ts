@@ -353,14 +353,14 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
     try {
       // Try to load from backend first via backendAPI (avoids calling frontend origin)
       try {
-        const data = await backendAPI.getCredentials('deribit');
+        // Always use new endpoint for decrypted credentials
+  const data = await backendAPI.getCredentials('deribit', 'live');
         if (data && data.success && data.credentials) {
-          console.log('[Store] Loaded credentials from backend');
-          // Map generic credentials to DeribitCredentials format
+          console.log('[Store] Loaded credentials from backend (decrypted)');
           set({ 
             credentials: {
-              apiKey: (data.credentials as any).api_key || (data.credentials as any).apiKey || '',
-              apiSecret: (data.credentials as any).api_secret || (data.credentials as any).apiSecret || '',
+              apiKey: data.credentials.apiKey || '',
+              apiSecret: data.credentials.apiSecret || '',
             }
           });
           return;
@@ -552,7 +552,8 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
       console.log('[Store] Placing test micro order via backend...');
       
       // Use new backend endpoint that includes SL/TP logic
-      const response = await fetch(`http://${window.location.hostname}:3000/api/v2/test-order`, {
+  const backendUrl = getBackendUrl();
+  const response = await fetch(`${backendUrl}/api/v2/test-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}), // Empty JSON object
@@ -1103,7 +1104,17 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
       try {
         // Dynamic backend URL - uses same host as frontend
         const backendUrl = getBackendUrl();
-        const response = await fetch(`${backendUrl}/api/connection/status`);
+        
+        // Get JWT token for authenticated requests
+        const token = localStorage.getItem('tradebaas:auth-token');
+        const headers: HeadersInit = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(`${backendUrl}/api/connection/status`, {
+          headers,
+        });
         const data = await response.json();
         
         if (data.success) {

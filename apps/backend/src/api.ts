@@ -518,6 +518,7 @@ import { userStrategyService, type UserStartStrategyRequest, type UserStopStrate
 export interface UserStrategyStartResponse {
   success: boolean;
   message: string;
+  strategyId?: string;
   error?: string;
 }
 
@@ -533,7 +534,11 @@ export interface UserStrategyStopResponse {
 export async function handleUserStartStrategy(request: UserStartStrategyRequest): Promise<UserStrategyStartResponse> {
   try {
     const result = await userStrategyService.startStrategy(request);
-    return result;
+    return {
+      success: result.success,
+      message: result.message,
+      strategyId: result.strategyId,
+    };
   } catch (error) {
     log.error('Failed to start user strategy', { error, request });
     return {

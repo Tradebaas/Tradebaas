@@ -29,13 +29,41 @@ declare module 'fastify' {
 }
 
 export async function authenticateRequest(request: FastifyRequest, reply: FastifyReply) {
-  const authHeader = request.headers.authorization;
+  // Accept token from Authorization header or cookie named 'tradebaas:auth-token' or 'tradebaas_auth'
+  const authHeader = request.headers.authorization as string | undefined;
+  let token: string | null = null;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return reply.code(401).send({ error: 'No token provided' });
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
   }
 
-  const token = authHeader.substring(7);
+  // Try cookies
+  if (!token) {
+    // Fastify may parse cookies into request.cookies if cookie plugin is enabled
+    const anyReq = request as any;
+    if (anyReq.cookies) {
+      token = anyReq.cookies['tradebaas:auth-token'] || anyReq.cookies['tradebaas_auth'] || null;
+    }
+  }
+
+  // Fallback: parse Cookie header manually
+  if (!token && request.headers.cookie) {
+    const raw = request.headers.cookie || '';
+    const cookies = raw.split(';').map((c: string) => c.trim());
+    for (const c of cookies) {
+      const parts = c.split('=');
+      const k = parts[0];
+      const v = parts.slice(1).join('=');
+      if (k === 'tradebaas:auth-token' || k === 'tradebaas_auth' || k === 'tradebaas_auth_token') {
+        token = decodeURIComponent(v || '');
+        break;
+      }
+    }
+  }
+
+  if (!token) {
+    return reply.code(401).send({ error: 'No token provided' });
+  }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);

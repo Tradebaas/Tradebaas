@@ -5,6 +5,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
+    "build": "echo 'No build needed - TypeScript only'",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

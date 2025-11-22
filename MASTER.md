@@ -26,7 +26,20 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 >   - Geschatte tijd: 3-4 weken fulltime (6-8 weken part-time)
 >
 >**📅 RECENT UPDATES (21 nov 2025 - LATEST):**
-> - ✅ **FASE 7 COMPLETE: PRODUCTION DEPLOYMENT + MONOREPO REFACTOR**
+> - ✅ **STRATEGY STATUS API FIX:** `/api/user/strategy/status` en `/api/user/strategy/start` endpoints retourneren nu correcte strategyId
+>   - Frontend gebruikt database ID in plaats van lege string
+>   - Strategy status polling werkt nu correct met JWT authenticatie
+>   - AnalysisDetailsDialog toont nu juiste strategie status in plaats van "null Active: false"
+>   - Probleem: Strategieën werden gestart maar hadden geen execution loop (alleen heartbeat)
+>   - Fix: Executor initialisatie, ticker subscription, en `onTicker()` calls toegevoegd
+>   - Resultaat: Per-user Razor/Thor strategieën analyseren nu live marktdata en kunnen trades plaatsen
+>   - Voorkomt inconsistenties tussen groene bolletje en werkelijke verbinding
+>   - Authenticated users zien nu correcte status van hun eigen Deribit client
+>   - Valt terug op globale status voor niet-geauthenticeerde requests
+>   - Voorkomt frontend 500 errors tijdens initialisatie
+>   - Betere user experience: toont $0.00 in plaats van foutmelding
+>   - Backend blijft proberen per-user client te krijgen, valt terug op globale client, geeft 0 als beide niet connected
+>   - Frontend `getBalance()` functie blijft werken, maar retourneert 0 wanneer niet connected
 >   - **Monorepo Architecture:** npm workspaces (apps/frontend, apps/backend, packages/shared-types)
 >   - **Massive Cleanup:** 171 files organized (143 docs → 3 folders, 28 scripts → 3 folders), 9 obsolete items deleted
 >   - **Root Directory:** 11 items only (down from 50+) - super clean and organized

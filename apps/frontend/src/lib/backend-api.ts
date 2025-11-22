@@ -112,11 +112,26 @@ class BackendAPI {
     return await response.json();
   }
 
-  async getCredentials(service: string): Promise<{ success: boolean; credentials?: DeribitCredentials }> {
-    const response = await fetch(`${this.baseUrl}/api/user/credentials/status`, {
+  
+  async getCredentials(service: string, broker: string = 'deribit', environment: DeribitEnvironment = 'live'): Promise<{ success: boolean; credentials?: DeribitCredentials }> {
+    // Use new endpoint for decrypted credentials
+    const response = await fetch(`${this.baseUrl}/api/user/credentials/decrypted?broker=${broker}&environment=${environment}`, {
       headers: this.getAuthHeaders(),
     });
-    return await response.json();
+    const result = await response.json();
+    if (result.success && result.credentials) {
+      return result;
+    }
+    // Fallback: test debug endpoint bij decryptie-fout
+    try {
+      const debugResponse = await fetch(`${this.baseUrl}/api/debug/decrypt-test?broker=${broker}&environment=${environment}`, {
+        headers: this.getAuthHeaders(),
+      });
+      const debugResult = await debugResponse.json();
+      return { success: false, debug: debugResult };
+    } catch (e) {
+      return { success: false, error: 'Failed to fetch credentials and debug endpoint.' };
+    }
   }
 
   async deleteCredentials(service: string): Promise<{ success: boolean }> {
