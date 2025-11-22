@@ -36,6 +36,9 @@ import { userBrokerRegistry } from './user-broker-registry';
 import { pool } from './db';
 import { hashPassword } from './services/auth-service';
 
+// Import user strategy service globally
+let userStrategyService: any = null;
+
 // Prefer explicit PORT, fallback to BACKEND_PORT (used by PM2 ecosystem) or default 3000
 const PORT = process.env.PORT
   ? parseInt(process.env.PORT)
@@ -618,16 +621,32 @@ server.get('/api/connection/status', async (request, reply) => {
     // Check for authenticated user first
     let userConnectionStatus = null;
     let userStrategiesActive = 0;
+    let userUptimeSeconds = 0;
+    let userIsAuthenticated = false;
+    let userWsOpen = false;
+    
     try {
       await (authenticateRequest as any)(request, reply);
       if ((reply as any).sent || (reply.raw && (reply.raw as any).writableEnded)) return;
       const userId = request.user?.userId;
       if (userId) {
+        userIsAuthenticated = true;
+        
+        // Get per-user connection status
         userConnectionStatus = userBrokerRegistry.getAnyConnectionStatus(userId, 'deribit');
         
         // Count active per-user strategies for this user
         const userStrategies = await userStrategyService.getStrategyStatus({ userId });
-        userStrategiesActive = userStrategies.filter(s => s.status === 'active').length;
+        userStrategiesActive = userStrategies.filter((s: any) => s.status === 'active').length;
+        
+        // Calculate uptime for per-user connection
+        if (userConnectionStatus?.connectedAt) {
+          userUptimeSeconds = Math.floor((Date.now() - userConnectionStatus.connectedAt) / 1000);
+        }
+        
+        // Check WebSocket status
+        const client = userBrokerRegistry.getAnyClient(userId, 'deribit')?.client;
+        userWsOpen = client?.isConnected?.() || false;
       }
     } catch (err) {
       // Ignore auth errors, fall back to global status
@@ -643,11 +662,11 @@ server.get('/api/connection/status', async (request, reply) => {
       environment: connectionStatus.environment,
       broker: connectionStatus.broker || 'deribit',
       connectedAt: connectionStatus.connectedAt,
-      uptime: connectionStatus.connectedAt ? Date.now() - connectionStatus.connectedAt : 0,
+      uptime: userUptimeSeconds * 1000 || (connectionStatus.connectedAt ? Date.now() - connectionStatus.connectedAt : 0),
       manuallyDisconnected: connectionStatus.manuallyDisconnected || false,
       websocket: {
-        connected: connectionStatus.connected,
-        authenticated: connectionStatus.connected,
+        connected: userWsOpen,
+        authenticated: userIsAuthenticated,
         lastPing: Date.now(),
       },
       health: {
@@ -2058,7 +2077,8 @@ const start = async () => {
   try {
     // Initialize user strategy service (per-user isolation)
     console.log('[START] Initializing user strategy service...');
-    const { userStrategyService } = await import('./user-strategy-service');
+    const { userStrategyService: userStrategyServiceInstance } = await import('./user-strategy-service');
+    userStrategyService = userStrategyServiceInstance;
     await userStrategyService.initialize();
     console.log('[START] User strategy service initialized');
     

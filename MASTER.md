@@ -26,7 +26,13 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 >   - Geschatte tijd: 3-4 weken fulltime (6-8 weken part-time)
 >
 >**📅 RECENT UPDATES (22 nov 2025 - LATEST):**
-> - ✅ **STRATEGY STOP FIX:** Stoppen van strategieën werkt nu correct voor per-user UUIDs
+> - ✅ **STRATEGY STATUS FIX:** Single source of truth voor per-user strategie lifecycle
+>   - UserStrategyService nu beschikbaar in alle routes (geen "is not defined" errors)
+>   - Connection status endpoint geeft juiste per-user data: activeStrategiesCount, uptimeSeconds, isConnected, isAuthenticated, wsOpen
+>   - UserBrokerRegistry slaat connectedAt timestamps op voor uptime berekening
+>   - Alle endpoints gebruiken dezelfde per-user services voor consistentie
+>   - Stop functie werkt voor zowel actieve als database-only strategieën
+>   - Tests toegevoegd voor user strategy en connection management
 >   - Backend stop endpoint accepteert nu strategyId direct (UUID)
 >   - UserStrategyService.stopStrategy() stopt ook strategieën die niet actief lopen maar wel in DB staan
 >   - Frontend status wordt correct bijgewerkt na stoppen
