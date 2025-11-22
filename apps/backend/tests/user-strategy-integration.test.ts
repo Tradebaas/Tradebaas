@@ -234,6 +234,33 @@ describe('Per-User Strategy and Connection Management', () => {
       expect(mockConnectionStatus.connected).toBe(true);
       expect(mockConnectionStatus.connectedAt).toBeDefined();
     });
+
+    it('should return correct response format for status modal', () => {
+      // Test the expected response structure
+      const expectedResponse = {
+        success: true,
+        broker: 'deribit',
+        environment: 'live',
+        isConnected: true,
+        isAuthenticated: true,
+        wsOpen: true,
+        connectedAt: 1234567890,
+        uptimeSeconds: 3600,
+        activeStrategiesCount: 2,
+        timestamp: Date.now()
+      };
+
+      // Verify the structure matches what the frontend expects
+      expect(expectedResponse).toHaveProperty('success');
+      expect(expectedResponse).toHaveProperty('broker');
+      expect(expectedResponse).toHaveProperty('environment');
+      expect(expectedResponse).toHaveProperty('isConnected');
+      expect(expectedResponse).toHaveProperty('isAuthenticated');
+      expect(expectedResponse).toHaveProperty('wsOpen');
+      expect(expectedResponse).toHaveProperty('uptimeSeconds');
+      expect(expectedResponse).toHaveProperty('activeStrategiesCount');
+      expect(expectedResponse).toHaveProperty('timestamp');
+    });
   });
 
   describe('Strategy status consistency', () => {

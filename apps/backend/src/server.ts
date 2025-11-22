@@ -462,10 +462,11 @@ server.get('/api/user/credentials/decrypted', { preHandler: authenticateRequest 
 server.get('/api/debug/decrypt-test', async (request, reply) => {
   try {
     // Dummy encrypted values (pas aan indien nodig)
-    const encrypted = request.query.encrypted as string;
-    const iv = request.query.iv as string;
-    const salt = request.query.salt as string;
-    const userId = request.query.userId as string || 'debug-user';
+    const query = request.query as any;
+    const encrypted = query.encrypted as string;
+    const iv = query.iv as string;
+    const salt = query.salt as string;
+    const userId = query.userId as string || 'debug-user';
     const fs = require('fs');
     const logLine = `[${new Date().toISOString()}] DEBUG_DECRYPT_TEST_REQUEST: encrypted=${encrypted}, iv=${iv}, salt=${salt}, userId=${userId}\n`;
     fs.appendFileSync('/root/Tradebaas-1/apps/backend/logs/debug-decrypt.log', logLine);
@@ -483,9 +484,9 @@ server.get('/api/debug/decrypt-test', async (request, reply) => {
     try {
       result = decryptData(encrypted, iv, salt, userId);
     } catch (err) {
-      console.log('DEBUG_DECRYPT_TEST_ERROR', { error: err.message, encrypted, iv, salt, userId });
-      request.log.error({ error: err.message, encrypted, iv, salt, userId }, 'DEBUG_DECRYPT_TEST_ERROR');
-      return reply.code(500).send({ error: err.message });
+      console.log('DEBUG_DECRYPT_TEST_ERROR', { error: (err as Error).message, encrypted, iv, salt, userId });
+      request.log.error({ error: (err as Error).message, encrypted, iv, salt, userId }, 'DEBUG_DECRYPT_TEST_ERROR');
+      return reply.code(500).send({ error: (err as Error).message });
     }
     return reply.send({ decrypted: result });
   } catch (error: any) {
@@ -624,6 +625,7 @@ server.get('/api/connection/status', async (request, reply) => {
     let userUptimeSeconds = 0;
     let userIsAuthenticated = false;
     let userWsOpen = false;
+    let userEnvironment = 'live'; // Default fallback
     
     try {
       await (authenticateRequest as any)(request, reply);
@@ -633,7 +635,7 @@ server.get('/api/connection/status', async (request, reply) => {
         userIsAuthenticated = true;
         
         // Get per-user connection status
-        userConnectionStatus = userBrokerRegistry.getAnyConnectionStatus(userId, 'deribit');
+        userConnectionStatus = await userBrokerRegistry.getAnyConnectionStatus(userId, 'deribit');
         
         // Count active per-user strategies for this user
         const userStrategies = await userStrategyService.getStrategyStatus({ userId });
@@ -647,6 +649,9 @@ server.get('/api/connection/status', async (request, reply) => {
         // Check WebSocket status
         const client = userBrokerRegistry.getAnyClient(userId, 'deribit')?.client;
         userWsOpen = client?.isConnected?.() || false;
+        
+        // Determine environment from connection status or fallback
+        userEnvironment = userConnectionStatus?.environment || 'live';
       }
     } catch (err) {
       // Ignore auth errors, fall back to global status
@@ -656,31 +661,37 @@ server.get('/api/connection/status', async (request, reply) => {
     const connectionStatus = userConnectionStatus || strategyService.getConnectionStatus();
     const healthMetrics = strategyService.getHealthMetrics();
 
-    // Get detailed WebSocket status
-    const detailedStatus = {
-      connected: connectionStatus.connected,
-      environment: connectionStatus.environment,
-      broker: connectionStatus.broker || 'deribit',
-      connectedAt: connectionStatus.connectedAt,
-      uptime: userUptimeSeconds * 1000 || (connectionStatus.connectedAt ? Date.now() - connectionStatus.connectedAt : 0),
-      manuallyDisconnected: connectionStatus.manuallyDisconnected || false,
-      websocket: {
-        connected: userWsOpen,
-        authenticated: userIsAuthenticated,
-        lastPing: Date.now(),
-      },
-      health: {
-        strategies: userStrategiesActive || healthMetrics.strategiesActive,
-        errors: healthMetrics.errors24h || 0,
-      },
-      timestamp: Date.now()
-    };
+    // Determine final status values
+    const isConnected = connectionStatus.connected;
+    const isAuthenticated = userIsAuthenticated;
+    const wsOpen = userWsOpen;
+    const environment = userEnvironment;
+    const uptimeSeconds = userUptimeSeconds;
+    const activeStrategiesCount = userStrategiesActive;
 
-    return reply.send({ success: true, ...detailedStatus });
+    return reply.send({
+      success: true,
+      broker: 'deribit',
+      environment,
+      isConnected,
+      isAuthenticated,
+      wsOpen,
+      connectedAt: connectionStatus.connectedAt,
+      uptimeSeconds,
+      activeStrategiesCount,
+      timestamp: Date.now()
+    });
   } catch (error: any) {
     return reply.code(500).send({
       success: false,
-      connected: false,
+      broker: 'deribit',
+      environment: 'live',
+      isConnected: false,
+      isAuthenticated: false,
+      wsOpen: false,
+      connectedAt: null,
+      uptimeSeconds: 0,
+      activeStrategiesCount: 0,
       error: error.message || 'Failed to get connection status',
       timestamp: Date.now()
     });
@@ -842,7 +853,7 @@ server.post('/api/user/strategy/stop', { preHandler: authenticateRequest }, asyn
     // If strategyId (UUID) is provided, look up the strategy details
     if (strategyId) {
       const strategies = await userStrategyService.getStrategyStatus({ userId });
-      const strategy = strategies.find(s => s.id === strategyId);
+      const strategy = strategies.find((s: any) => s.id === strategyId);
       
       if (!strategy) {
         return reply.code(404).send({
@@ -939,7 +950,7 @@ server.get('/api/user/strategy/analysis/:strategyId', { preHandler: authenticate
     });
 
     // Find the strategy by ID
-    const strategy = strategies.find(s => s.id === strategyId);
+    const strategy = strategies.find((s: any) => s.id === strategyId);
     if (!strategy) {
       return reply.code(404).send({
         success: false,
@@ -1006,7 +1017,7 @@ server.get('/api/user/strategy/analysis/:strategyId', { preHandler: authenticate
       analysis,
     });
   } catch (error: any) {
-    log.error('[API] User strategy analysis request failed', { strategyId, error: error.message, stack: error.stack });
+    log.error('[API] User strategy analysis request failed', { strategyId: (request.params as any).strategyId, error: error.message, stack: error.stack });
     return reply.code(500).send({
       success: false,
       error: error.message || 'Failed to get analysis data',
