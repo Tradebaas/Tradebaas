@@ -151,7 +151,7 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
   realTimeConnectionInterval: null as number | null,
 
   initializeClient: () => {
-    const { environment, addErrorLog } = get();
+    const { environment, addErrorLog, connect } = get();
     
     const getTelemetryEnabled = async () => {
       const enabled = await safeKV.get<string>('telemetry-enabled');
@@ -236,6 +236,43 @@ export const useTradingStore = create<TradingStore>((set, get) => ({
     }, telemetryHooks);
     
     set({ client });
+
+    // AUTO-CONNECT LOGIC: Check if we should auto-connect on page load
+    // This ensures connections persist across page reloads
+    setTimeout(async () => {
+      try {
+        // Check if user is authenticated (has JWT token)
+        const token = localStorage.getItem('tradebaas:auth-token');
+        if (!token) {
+          console.log('[Store] No auth token found, skipping auto-connect');
+          return;
+        }
+
+        // Load saved credentials
+        await get().loadSavedCredentials();
+        const credentials = get().credentials;
+        
+        if (!credentials) {
+          console.log('[Store] No saved credentials found, skipping auto-connect');
+          return;
+        }
+
+        // Check backend connection status
+        const backendStatus = await backendAPI.getStatus();
+        if (backendStatus.connection.connected && !backendStatus.connection.manuallyDisconnected) {
+          console.log('[Store] Backend shows active connection, auto-connecting frontend...');
+          
+          // Connect using loaded credentials
+          await connect(credentials);
+          console.log('[Store] ✅ Auto-connected successfully');
+        } else {
+          console.log('[Store] Backend not connected or manually disconnected, skipping auto-connect');
+        }
+      } catch (error) {
+        console.log('[Store] Auto-connect failed (normal on first load):', error);
+        // Don't show error to user - this is expected on first load
+      }
+    }, 1000); // Small delay to allow backend to be ready
   },
 
   setEnvironment: (env) => {

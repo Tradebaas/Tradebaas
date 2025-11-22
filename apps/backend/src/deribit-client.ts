@@ -678,6 +678,18 @@ export class BackendDeribitClient {
     
     console.log(`[DeribitClient] Subscribing to ${channel}...`);
     
+    // First check if instrument exists
+    try {
+      const instrumentInfo = await this.getInstrument(instrument);
+      if (!instrumentInfo) {
+        throw new Error(`Instrument ${instrument} not found`);
+      }
+      console.log(`[DeribitClient] ✅ Instrument ${instrument} exists: ${instrumentInfo.instrument_name}`);
+    } catch (error) {
+      console.error(`[DeribitClient] ❌ Instrument ${instrument} not found or error checking:`, error);
+      throw new Error(`Cannot subscribe to ticker for non-existent instrument ${instrument}`);
+    }
+    
     // Store callback BEFORE subscribing
     this.subscriptions.set(channel, callback);
     

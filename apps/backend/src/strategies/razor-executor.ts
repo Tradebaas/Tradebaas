@@ -157,8 +157,8 @@ export class RazorExecutor {
       await this.initializeHistoricalData();
       console.log('[Razor] ✅ INITIALIZE COMPLETE - Strategy ready');
       
-      // Start mock ticker updates if using mock data (no live connection)
-      this.startMockTickerUpdates();
+      // DISABLED: Mock ticker updates interfere with real ticker data
+      // this.startMockTickerUpdates();
       
       // Initialize checkpoints after loading historical data
       this.updateCheckpoints();

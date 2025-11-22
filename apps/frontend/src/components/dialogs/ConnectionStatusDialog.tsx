@@ -10,20 +10,14 @@ interface ConnectionStatusDialogProps {
 }
 
 interface RealTimeConnectionStatus {
-  connected: boolean;
-  environment: 'live' | 'testnet';
   broker: string;
-  connectedAt?: number;
-  uptime: number;
-  websocket: {
-    connected: boolean;
-    authenticated: boolean;
-    lastPing: number;
-  };
-  health: {
-    strategies: number;
-    errors: number;
-  };
+  environment: 'live' | 'testnet';
+  isConnected: boolean;
+  isAuthenticated: boolean;
+  wsOpen: boolean;
+  connectedAt: number | null;
+  uptimeSeconds: number;
+  activeStrategiesCount: number;
   timestamp: number;
 }
 
@@ -78,8 +72,7 @@ export function ConnectionStatusDialog({ open, onOpenChange }: ConnectionStatusD
     };
   }, [open]);
 
-  const formatUptime = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000);
+  const formatUptime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
 
@@ -104,7 +97,8 @@ export function ConnectionStatusDialog({ open, onOpenChange }: ConnectionStatusD
     );
   }
 
-  const isHealthy = status?.connected && status?.websocket?.connected;
+  const isHealthy = status?.isConnected && status?.isAuthenticated;
+  const isDegraded = status?.isConnected && !status?.wsOpen; // Connected but WS closed
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -129,7 +123,9 @@ export function ConnectionStatusDialog({ open, onOpenChange }: ConnectionStatusD
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center p-2 rounded-lg bg-muted/20">
               <span className="text-muted-foreground">Omgeving</span>
-              <span className="font-medium capitalize">{status?.environment || 'Unknown'}</span>
+              <span className="font-medium capitalize">
+                {status?.environment === 'live' ? 'Live' : status?.environment === 'testnet' ? 'Test' : 'Unknown'}
+              </span>
             </div>
 
             <div className="flex justify-between items-center p-2 rounded-lg bg-muted/20">
@@ -137,53 +133,55 @@ export function ConnectionStatusDialog({ open, onOpenChange }: ConnectionStatusD
               <div className="flex items-center gap-2">
                 {isHealthy ? (
                   <CheckCircle className="w-4 h-4 text-green-500" />
+                ) : isDegraded ? (
+                  <Clock className="w-4 h-4 text-yellow-500" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
-                <span className="font-medium">{isHealthy ? 'Actief' : 'Gesloten'}</span>
+                <span className="font-medium">
+                  {isHealthy ? 'Actief' : isDegraded ? 'Beperkt' : 'Gesloten'}
+                </span>
               </div>
             </div>
 
             <div className="flex justify-between items-center p-2 rounded-lg bg-muted/20">
               <span className="text-muted-foreground">WebSocket</span>
               <div className="flex items-center gap-2">
-                {status?.websocket?.connected ? (
+                {status?.wsOpen ? (
                   <CheckCircle className="w-4 h-4 text-green-500" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
-                <span className="font-medium">{status?.websocket?.connected ? 'Open' : 'Gesloten'}</span>
+                <span className="font-medium">{status?.wsOpen ? 'Open' : 'Gesloten'}</span>
               </div>
             </div>
 
             <div className="flex justify-between items-center p-2 rounded-lg bg-muted/20">
               <span className="text-muted-foreground">Authenticatie</span>
               <div className="flex items-center gap-2">
-                {status?.websocket?.authenticated ? (
+                {status?.isAuthenticated ? (
                   <CheckCircle className="w-4 h-4 text-green-500" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
-                <span className="font-medium">{status?.websocket?.authenticated ? 'Ja' : 'Nee'}</span>
+                <span className="font-medium">{status?.isAuthenticated ? 'Ja' : 'Nee'}</span>
               </div>
             </div>
 
-            {isHealthy && status?.uptime !== undefined && (
+            {(isHealthy || isDegraded) && status?.uptimeSeconds !== undefined && status?.uptimeSeconds > 0 && (
               <div className="flex justify-between items-center p-2 rounded-lg bg-muted/20">
                 <span className="text-muted-foreground flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
                   Uptime
                 </span>
-                <span className="font-medium">{formatUptime(status.uptime)}</span>
+                <span className="font-medium">{formatUptime(status.uptimeSeconds)}</span>
               </div>
             )}
 
-            {status?.health && (
-              <div className="flex justify-between items-center p-2 rounded-lg bg-muted/20">
-                <span className="text-muted-foreground">Actieve Strategieën</span>
-                <span className="font-medium">{status.health.strategies}</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center p-2 rounded-lg bg-muted/20">
+              <span className="text-muted-foreground">Actieve Strategieën</span>
+              <span className="font-medium">{status?.activeStrategiesCount || 0}</span>
+            </div>
           </div>
 
           {status && (
