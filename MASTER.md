@@ -27,6 +27,9 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 >
 >**📅 RECENT UPDATES (22 nov 2025 - LATEST):**
 > - ✅ **STRATEGY STOP FIX:** Stoppen van strategieën werkt nu correct voor per-user UUIDs
+>   - Backend stop endpoint accepteert nu strategyId direct (UUID)
+>   - UserStrategyService.stopStrategy() stopt ook strategieën die niet actief lopen maar wel in DB staan
+>   - Frontend status wordt correct bijgewerkt na stoppen
 >   - BackendStrategyClient.stopStrategy() detecteert UUID format en zoekt strategie op
 >   - Store.stopStrategy() gebruikt juiste response format van getStrategyStatus()
 >   - Alle strategieën kunnen nu correct worden gestopt via UI

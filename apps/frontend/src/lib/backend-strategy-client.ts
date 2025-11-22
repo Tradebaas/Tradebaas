@@ -139,55 +139,32 @@ class BackendStrategyClient {
     try {
       console.log('[BackendStrategyClient] Stopping strategy on backend (per-user):', request);
       
-      // For UUID strategyIds (per-user), we need to look up the strategy first
+      // For UUID strategyIds, pass the strategyId directly to the backend
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.strategyId);
       
-      let strategyName: string;
-      let instrument: string;
-      let broker: string;
-      let environment: string;
+      let body: any = {};
       
       if (isUuid) {
-        // Look up strategy by UUID first
-        const statusResponse = await this.getStrategyStatus();
-        if (!statusResponse.success || !statusResponse.strategies.length) {
-          return {
-            success: false,
-            message: 'No strategies found to stop',
-          };
-        }
-        
-        const strategy = statusResponse.strategies.find(s => s.id === request.strategyId);
-        if (!strategy) {
-          return {
-            success: false,
-            message: 'Strategy not found',
-          };
-        }
-        
-        strategyName = strategy.name;
-        instrument = 'BTC-PERPETUAL'; // Default, could be made configurable
-        broker = 'deribit'; // Default
-        environment = 'live'; // Default, could be made configurable
+        // Pass strategyId directly - backend will look it up
+        body = {
+          strategyId: request.strategyId,
+        };
       } else {
         // Legacy parsing for old format strategyIds
         const parts = request.strategyId.split(':');
-        strategyName = parts.length >= 2 ? parts[1] : parts[0];
-        instrument = parts.length >= 3 ? parts[2] : 'BTC-PERPETUAL';
-        broker = 'deribit'; // TODO: Make configurable
-        environment = parts.length >= 5 ? parts[4] as 'live' | 'testnet' : 'testnet';
+        body = {
+          strategyName: parts.length >= 2 ? parts[1] : parts[0],
+          instrument: parts.length >= 3 ? parts[2] : 'BTC-PERPETUAL',
+          broker: 'deribit', // TODO: Make configurable
+          environment: parts.length >= 5 ? parts[4] as 'live' | 'testnet' : 'testnet',
+        };
       }
       
       // FASE 4: Use per-user endpoint with JWT authentication
       const response = await fetch(`${this.baseUrl}/api/user/strategy/stop`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify({
-          strategyName,
-          instrument,
-          broker,
-          environment,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();

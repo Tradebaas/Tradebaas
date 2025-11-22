@@ -812,25 +812,50 @@ server.post('/api/user/strategy/start', { preHandler: authenticateRequest }, asy
 server.post('/api/user/strategy/stop', { preHandler: authenticateRequest }, async (request, reply) => {
   try {
     const userId = (request as any).user.userId;
-    const { strategyName, instrument, broker, environment } = request.body as {
-      strategyName: string;
-      instrument: string;
+    const { strategyId, strategyName, instrument, broker, environment } = request.body as {
+      strategyId?: string;
+      strategyName?: string;
+      instrument?: string;
       broker?: string;
       environment: 'live' | 'testnet';
     };
     
-    log.info('User strategy stop request received', { userId, strategyName, instrument, broker, environment });
-    
-    const response = await handleUserStopStrategy({
-      userId,
-      strategyName,
-      instrument,
-      broker,
-      environment,
-    });
-    
-    const statusCode = response.success ? 200 : 400;
-    return reply.code(statusCode).send(response);
+    // If strategyId (UUID) is provided, look up the strategy details
+    if (strategyId) {
+      const strategies = await userStrategyService.getStrategyStatus({ userId });
+      const strategy = strategies.find(s => s.id === strategyId);
+      
+      if (!strategy) {
+        return reply.code(404).send({
+          success: false,
+          message: 'Strategy not found',
+        });
+      }
+      
+      // Use the found strategy details
+      const response = await handleUserStopStrategy({
+        userId,
+        strategyName: strategy.strategyName,
+        instrument: strategy.instrument,
+        broker: strategy.broker,
+        environment: strategy.environment,
+      });
+      
+      const statusCode = response.success ? 200 : 400;
+      return reply.code(statusCode).send(response);
+    } else {
+      // Legacy: use provided parameters
+      const response = await handleUserStopStrategy({
+        userId,
+        strategyName: strategyName || 'razor',
+        instrument: instrument || 'BTC-PERPETUAL',
+        broker: broker || 'deribit',
+        environment: environment || 'testnet',
+      });
+      
+      const statusCode = response.success ? 200 : 400;
+      return reply.code(statusCode).send(response);
+    }
   } catch (error: any) {
     log.error('Failed to stop user strategy', { error: error.message, stack: error.stack });
     return reply.code(500).send({

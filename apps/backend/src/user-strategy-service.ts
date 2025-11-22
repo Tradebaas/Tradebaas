@@ -339,22 +339,22 @@ export class UserStrategyService {
     try {
       const instance = this.runningStrategies.get(strategyKey);
       
-      if (!instance) {
-        return {
-          success: false,
-          message: 'Strategy is not running',
-        };
+      // If strategy is actually running, stop it properly
+      if (instance) {
+        // Stop the execution loop
+        if (instance.intervalId) {
+          clearInterval(instance.intervalId);
+        }
+
+        // Remove from running strategies
+        this.runningStrategies.delete(strategyKey);
+        console.log(`[UserStrategyService] ✅ Strategy stopped (was running): ${strategyKey}`);
+      } else {
+        console.log(`[UserStrategyService] Strategy not actively running, but checking database: ${strategyKey}`);
       }
 
-      // Stop the execution loop
-      if (instance.intervalId) {
-        clearInterval(instance.intervalId);
-      }
-
-      // Remove from running strategies
-      this.runningStrategies.delete(strategyKey);
-
-      // Update database - mark as manually disconnected (autoReconnect = false)
+      // Always update database - mark as manually disconnected (autoReconnect = false)
+      // This handles cases where strategy is in database but not actually running
       await userStrategyRepository.markDisconnected(
         userId,
         strategyName,
@@ -364,7 +364,7 @@ export class UserStrategyService {
         environment
       );
 
-      console.log(`[UserStrategyService] ✅ Strategy stopped: ${strategyKey}`);
+      console.log(`[UserStrategyService] ✅ Strategy marked as stopped in database: ${strategyKey}`);
 
       return {
         success: true,
