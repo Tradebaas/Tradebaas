@@ -25,8 +25,13 @@ Tradebaas Monster (9:11) – Functioneel Overzicht
 >   - Manual disconnect requirement gehandhaafd
 >   - Geschatte tijd: 3-4 weken fulltime (6-8 weken part-time)
 >
->**📅 RECENT UPDATES (21 nov 2025 - LATEST):**
-> - ✅ **STRATEGY STATUS API FIX:** `/api/user/strategy/status` en `/api/user/strategy/start` endpoints retourneren nu correcte strategyId
+>**📅 RECENT UPDATES (22 nov 2025 - LATEST):**
+> - ✅ **CONNECTION STATUS DIALOG FIX:** JWT tokens toegevoegd aan ConnectionStatusDialog polling
+>   - Dialog toont nu juiste omgeving en authenticatie status in plaats van "no token provided"
+> - ✅ **ANALYSIS ENDPOINT FIX:** Nieuwe `/api/user/strategy/analysis/{strategyId}` endpoint voor per-user strategieën
+>   - Frontend detecteert automatisch UUID format en gebruikt juiste endpoint
+>   - AnalysisDetailsDialog werkt nu correct met live strategie data
+>   - 404 errors opgelost voor per-user strategie analysis
 >   - Frontend gebruikt database ID in plaats van lege string
 >   - Strategy status polling werkt nu correct met JWT authenticatie
 >   - AnalysisDetailsDialog toont nu juiste strategie status in plaats van "null Active: false"

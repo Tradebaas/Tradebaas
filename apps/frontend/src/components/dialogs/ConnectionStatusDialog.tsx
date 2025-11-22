@@ -41,7 +41,17 @@ export function ConnectionStatusDialog({ open, onOpenChange }: ConnectionStatusD
       try {
         // Dynamic backend URL - uses same host as frontend
         const backendUrl = getBackendUrl();
-        const response = await fetch(`${backendUrl}/api/connection/status`);
+        
+        // Get JWT token for authenticated requests
+        const token = localStorage.getItem('tradebaas:auth-token');
+        const headers: HeadersInit = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(`${backendUrl}/api/connection/status`, {
+          headers,
+        });
         const data = await response.json();
         
         if (data.success) {

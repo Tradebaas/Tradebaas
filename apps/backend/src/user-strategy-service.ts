@@ -420,8 +420,47 @@ export class UserStrategyService {
     }
 
     // Get analysis state from executor
-    // TODO: Executors need to expose getAnalysisState() method
-    return null; // Placeholder
+    if (typeof instance.executor.getAnalysisState === 'function') {
+      return instance.executor.getAnalysisState();
+    }
+
+    // Fallback: Return default analysis state for running strategies
+    const now = Date.now();
+    return {
+      strategyId: strategyKey,
+      strategyName,
+      instrument,
+      status: 'analyzing',
+      currentPrice: null,
+      lastUpdated: now,
+      indicators: {
+        emaFast: null,
+        emaSlow: null,
+        rsi: null,
+        volume: 0,
+        volatility: 0,
+      },
+      signal: {
+        type: 'none',
+        strength: 0,
+        confidence: 0,
+        reasons: ['Strategie wordt opgestart, wacht op voldoende marktdata'],
+      },
+      checkpoints: [
+        {
+          id: 'initializing',
+          label: 'Strategie wordt opgestart',
+          description: 'Marktdata wordt verzameld en indicatoren worden berekend',
+          status: 'pending',
+          value: undefined,
+          timestamp: now,
+        },
+      ],
+      dataPoints: 0,
+      requiredDataPoints: 30,
+      cooldownUntil: null,
+      nextCheckAt: null,
+    };
   }
 
   /**

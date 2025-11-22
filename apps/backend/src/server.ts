@@ -877,7 +877,95 @@ server.get('/api/strategy/status', async (request) => {
   };
 });
 
-// Get strategy analysis state (real-time monitoring data)
+// GET /api/user/strategy/analysis/:strategyId - Get analysis for user's strategy
+server.get('/api/user/strategy/analysis/:strategyId', { preHandler: authenticateRequest }, async (request, reply) => {
+  try {
+    const { strategyId } = request.params as { strategyId: string };
+    const userId = (request as any).user.userId;
+
+    // Parse strategyId to extract userId, strategyName, instrument, broker, environment
+    // Format: database-uuid (we need to look it up in the database)
+    const strategies = await userStrategyService.getStrategyStatus({
+      userId,
+    });
+
+    // Find the strategy by ID
+    const strategy = strategies.find(s => s.id === strategyId);
+    if (!strategy) {
+      return reply.code(404).send({
+        success: false,
+        error: 'Strategy not found',
+      });
+    }
+
+    // Get analysis state from user strategy service
+    const analysis = await userStrategyService.getStrategyAnalysis(
+      userId,
+      strategy.strategyName,
+      strategy.instrument,
+      strategy.broker,
+      strategy.environment
+    );
+
+    if (!analysis) {
+      // Return default analysis state for running strategies
+      const now = Date.now();
+      const defaultAnalysis = {
+        strategyId,
+        strategyName: strategy.strategyName,
+        instrument: strategy.instrument,
+        status: 'analyzing',
+        currentPrice: null,
+        lastUpdated: now,
+        indicators: {
+          emaFast: null,
+          emaSlow: null,
+          rsi: null,
+          volume: 0,
+          volatility: 0,
+        },
+        signal: {
+          type: 'none',
+          strength: 0,
+          confidence: 0,
+          reasons: ['Strategie wordt opgestart, wacht op voldoende marktdata'],
+        },
+        checkpoints: [
+          {
+            id: 'initializing',
+            label: 'Strategie wordt opgestart',
+            description: 'Marktdata wordt verzameld en indicatoren worden berekend',
+            status: 'pending',
+            value: undefined,
+            timestamp: now,
+          },
+        ],
+        dataPoints: 0,
+        requiredDataPoints: 30,
+        cooldownUntil: null,
+        nextCheckAt: null,
+      };
+
+      return reply.send({
+        success: true,
+        analysis: defaultAnalysis,
+      });
+    }
+
+    return reply.send({
+      success: true,
+      analysis,
+    });
+  } catch (error: any) {
+    log.error('[API] User strategy analysis request failed', { strategyId, error: error.message, stack: error.stack });
+    return reply.code(500).send({
+      success: false,
+      error: error.message || 'Failed to get analysis data',
+    });
+  }
+});
+
+// GET /api/strategy/analysis/:strategyId - Get strategy analysis state (legacy)
 server.get('/api/strategy/analysis/:strategyId', async (request, reply) => {
   const { strategyId } = request.params as { strategyId: string };
   

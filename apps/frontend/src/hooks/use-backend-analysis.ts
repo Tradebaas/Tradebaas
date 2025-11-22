@@ -71,10 +71,24 @@ export function useBackendAnalysis(strategyId: string | null) {
       try {
         // Use backend on port 3000, not frontend origin
         const backendUrl = getBackendUrl();
-        const response = await fetch(
-          `${backendUrl}/api/strategy/analysis/${strategyId}`,
-          { signal: AbortSignal.timeout(5000) }
-        );
+        
+        // Get JWT token for authenticated requests
+        const token = localStorage.getItem('tradebaas:auth-token');
+        const headers: HeadersInit = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Check if this is a per-user strategy ID (UUID format) or legacy global ID
+        const isPerUserStrategy = strategyId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strategyId);
+        const endpoint = isPerUserStrategy 
+          ? `${backendUrl}/api/user/strategy/analysis/${strategyId}`
+          : `${backendUrl}/api/strategy/analysis/${strategyId}`;
+        
+        const response = await fetch(endpoint, { 
+          signal: AbortSignal.timeout(5000),
+          headers,
+        });
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
